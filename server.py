@@ -1,10 +1,20 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Any, Dict
 
 from main import run_meera, init_workflow, workflow as global_workflow
 
 app = FastAPI(title="Meera Hive Mind API")
+
+# CORS middleware so your Next.js frontend can call this API from the browser
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],          # later you can restrict to your frontend domains
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 class ChatRequest(BaseModel):
