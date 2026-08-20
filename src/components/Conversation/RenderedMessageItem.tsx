@@ -26,6 +26,10 @@ import {
   MyCustomUl,
   renderStandardInlineCode,
 } from '@/components/MessageRenderDesign/MarkdownComponents';
+import {
+  getInteractiveArtifactKind,
+  InteractiveArtifact,
+} from '@/components/MessageRenderDesign/InteractiveArtifact';
 import { ImageModal } from '@/components/ui/ImageModal';
 import { formatTime } from '@/lib/dateUtils';
 import { truncateFileName } from '@/lib/stringUtils';
@@ -302,6 +306,7 @@ export const RenderedMessageItem: React.FC<{
                       <ReactMarkdown
                         remarkPlugins={[remarkGfm]}
                         components={{
+                          pre: ({ children }) => <>{children}</>,
                           p: MyCustomParagraph,
                           h1: MyCustomH1,
                           h2: MyCustomH2,
@@ -346,9 +351,18 @@ export const RenderedMessageItem: React.FC<{
                                 node,
                               });
                             } else {
-                              const match = /language-(\w+)/.exec(className || '');
+                              const match = /language-([\w-]+)/.exec(className || '');
                               const lang = match ? match[1] : '';
                               const isMultiLine = String(markdownChildren || '').includes('\n');
+
+                              if (getInteractiveArtifactKind(lang)) {
+                                return (
+                                  <InteractiveArtifact
+                                    language={lang}
+                                    code={String(markdownChildren || '').replace(/\n$/, '')}
+                                  />
+                                );
+                              }
 
                               if (lang || isMultiLine) {
                                 return (
