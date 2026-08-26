@@ -88,7 +88,7 @@ export const useMessageSubmission = ({
   message,
   currentAttachments,
   chatMessages,
-  // isSearchActive, // not needed here
+  isSearchActive,
   isSending,
   setIsSending,
   setCurrentThoughtText,
@@ -319,6 +319,7 @@ export const useMessageSubmission = ({
         await chatService.streamMessage({
           message: trimmedMessage,
           attachments: outgoingAttachments,
+          webSearch: isSearchActive,
           onDelta: (delta) => {
             fullAssistantText += delta;
             if (!assistantId) return;
@@ -399,6 +400,7 @@ export const useMessageSubmission = ({
     },
     [
       isSending,
+      isSearchActive,
       createOptimisticMessage,
       setChatMessages,
       clearAllInput,

@@ -48,6 +48,7 @@ export async function streamMeera({
   message,
   messages,
   attachments,
+  webSearch,
   userId,
   sessionId,
   userMessageId,
@@ -65,6 +66,7 @@ export async function streamMeera({
   message?: string;
   messages: LLMHistoryMessage[];
   attachments?: ChatRequestAttachment[];
+  webSearch?: boolean;
   userId: string;
   sessionId?: string;
 
@@ -121,6 +123,7 @@ export async function streamMeera({
         message,
         messages,
         attachments,
+        webSearch,
         userId,
         sessionId,
         stream: true,

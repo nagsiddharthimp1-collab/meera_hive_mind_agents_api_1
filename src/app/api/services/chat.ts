@@ -690,6 +690,7 @@ export const chatService = {
   async streamMessage({
     message,
     attachments = [],
+    webSearch = false,
     sessionId,
     onDelta,
     onDone,
@@ -698,6 +699,7 @@ export const chatService = {
   }: {
     message: string;
     attachments?: OutgoingAttachment[];
+    webSearch?: boolean;
     sessionId?: string;
     onDelta: (delta: string) => void;
     onDone?: (finalMsg: AssistantMsg) => void;
@@ -807,6 +809,7 @@ export const chatService = {
               message,
               messages: historyForModel,
               attachments: normalizedAttachments,
+              webSearch,
               userId,
               sessionId: effectiveSessionId,
               stream: false,
@@ -894,6 +897,7 @@ export const chatService = {
           message,
           messages: historyForModel,
           attachments: normalizedAttachments,
+          webSearch,
           userId,
           sessionId: effectiveSessionId,
           userMessageId,
@@ -925,6 +929,7 @@ export const chatService = {
             message,
             messages: historyForModel,
             attachments: normalizedAttachments,
+            webSearch,
             userId,
             sessionId: effectiveSessionId,
             stream: false,
