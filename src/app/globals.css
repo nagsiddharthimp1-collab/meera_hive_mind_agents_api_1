@@ -1,0 +1,128 @@
+@import 'tailwindcss';
+
+:root {
+  --background: #faf3e9;
+  --primary: #0c3c26;
+  --primary-light: #acb7a9;
+  --secondary: #6b7280;
+  --card: #ffffff;
+}
+
+[data-theme='dark'] {
+  --background: #262624;
+  --primary: #faf3e9;
+  --primary-light: #526957;
+  --secondary: #a0aec0;
+  --card: #141413;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-primary: var(--primary);
+  --color-primary-light: var(--primary-light);
+  --color-secondary: var(--secondary);
+  --color-card: var(--card);
+}
+
+body {
+  background: var(--background);
+  color: var(--primary);
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+html {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* Improved scrollbar styling that matches our theme */
+/* For Webkit browsers (Chrome, Safari) */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--primary-light);
+  border-radius: 12px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--primary);
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--primary-light) transparent;
+}
+
+/* Custom thin scrollbar for specific elements */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: var(--primary-light);
+  opacity: 0.7;
+  border-radius: 20px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: var(--primary);
+}
+
+/* Firefox thin scrollbar */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--primary-light) transparent;
+}
+
+/* Custom extra-thin scrollbar for specific elements */
+.scrollbar-xs::-webkit-scrollbar {
+  width: 1px;
+}
+
+.scrollbar-xs::-webkit-scrollbar-button {
+  width: 0;
+  height: 0;
+}
+
+.scrollbar-xs::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-xs::-webkit-scrollbar-thumb {
+  background: var(--primary-light);
+  opacity: 0.7;
+  border-radius: 20px;
+}
+
+.scrollbar-xs::-webkit-scrollbar-thumb:hover {
+  background: var(--primary);
+}
+
+/* Firefox extra-thin scrollbar */
+.scrollbar-xs {
+  scrollbar-width: thin; /* Firefox doesn't support thinner than 'thin' */
+  scrollbar-color: var(--primary-light) transparent;
+}
+
+/* Hide scrollbar */
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

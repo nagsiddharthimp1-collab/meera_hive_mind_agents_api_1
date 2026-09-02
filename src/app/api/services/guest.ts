@@ -1,0 +1,39 @@
+'use client';
+
+import { getGuestToken, setGuestToken } from '@/lib/authRedirect';
+
+export interface GuestTokenResponse {
+  guest_token: string;
+}
+
+export const guestService = {
+  // keep the same signature the page expects
+  async getGuestToken(_referralId?: string): Promise<GuestTokenResponse | null> {
+    // Mark parameter as intentionally unused so ESLint is happy
+    void _referralId;
+
+    // Only run in the browser
+    if (typeof window === 'undefined') {
+      return null;
+    }
+
+    const existing = getGuestToken();
+    if (existing) {
+      return { guest_token: existing };
+    }
+
+    const token =
+      typeof window.crypto !== 'undefined' &&
+      typeof window.crypto.randomUUID === 'function'
+        ? window.crypto.randomUUID()
+        : `guest-${Math.random().toString(36).slice(2)}`;
+
+    setGuestToken(token);
+
+    return { guest_token: token };
+  },
+
+  async createGuestToken(referralId?: string): Promise<GuestTokenResponse | null> {
+    return this.getGuestToken(referralId);
+  },
+};
