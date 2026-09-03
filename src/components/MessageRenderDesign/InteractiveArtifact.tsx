@@ -7,7 +7,9 @@ import {
   FiCode,
   FiCopy,
   FiMaximize2,
+  FiMinimize2,
   FiRefreshCw,
+  FiRotateCcw,
   FiX,
 } from 'react-icons/fi';
 
@@ -30,6 +32,22 @@ const ARTIFACT_META: Record<InteractiveArtifactKind, { title: string; eyebrow: s
   plotly: { title: 'Interactive graph', eyebrow: 'Plotly' },
   'live-html': { title: 'Interactive app', eyebrow: 'Live HTML' },
   'live-react': { title: 'Interactive app', eyebrow: 'Live React' },
+};
+
+const getArtifactTitle = (kind: InteractiveArtifactKind, code: string) => {
+  if (kind !== 'plotly') return ARTIFACT_META[kind].title;
+
+  try {
+    const parsed = JSON.parse(code) as {
+      layout?: { title?: string | { text?: string } };
+    };
+    const rawTitle =
+      typeof parsed.layout?.title === 'string' ? parsed.layout.title : parsed.layout?.title?.text;
+    const title = rawTitle?.replace(/<[^>]*>/g, '').replace(/&amp;/g, '&').trim();
+    return title || ARTIFACT_META[kind].title;
+  } catch {
+    return ARTIFACT_META[kind].title;
+  }
 };
 
 const PLOTLY_CDN = 'https://cdn.plot.ly/plotly-2.35.2.min.js';
@@ -150,6 +168,16 @@ const makePlotlyDocument = (code: string) => {
         Plotly.newPlot(root, data, layout, config).then(() => {
           const observer = new ResizeObserver(() => Plotly.Plots.resize(root));
           observer.observe(document.body);
+          window.addEventListener('message', (event) => {
+            if (event.data?.source !== 'meera-artifact-viewer') return;
+            if (event.data.command === 'reset') {
+              const update = {};
+              Object.keys(root._fullLayout || {}).forEach((key) => {
+                if (/^[xy]axis\\d*$/.test(key)) update[key + '.autorange'] = true;
+              });
+              Plotly.relayout(root, update);
+            }
+          });
         }).catch((error) => {
           document.body.innerHTML = '<main style="padding:24px"><strong>Chart error</strong><p>' + String(error.message || error) + '</p></main>';
         });
@@ -238,15 +266,22 @@ export const InteractiveArtifact: React.FC<InteractiveArtifactProps> = ({ langua
   const [copied, setCopied] = useState(false);
   const [inlineLoading, setInlineLoading] = useState(true);
   const [expandedLoading, setExpandedLoading] = useState(true);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const expandedFrameRef = useRef<HTMLIFrameElement>(null);
 
   const srcDoc = useMemo(() => (kind ? makeArtifactDocument(kind, code) : ''), [code, kind]);
-  useEffect(
-    () => () => {
+  const displayTitle = useMemo(() => (kind ? getArtifactTitle(kind, code) : ''), [code, kind]);
+  useEffect(() => {
+    const onFullscreenChange = () => setIsFullscreen(document.fullscreenElement === panelRef.current);
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+
+    return () => {
       if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
-    },
-    [],
-  );
+      document.removeEventListener('fullscreenchange', onFullscreenChange);
+    };
+  }, []);
 
   if (!kind) return null;
 
@@ -275,8 +310,28 @@ export const InteractiveArtifact: React.FC<InteractiveArtifactProps> = ({ langua
   };
 
   const closeArtifact = () => {
+    if (document.fullscreenElement === panelRef.current) void document.exitFullscreen();
     setIsOpen(false);
     setShowCode(false);
+  };
+
+  const toggleFullscreen = async () => {
+    try {
+      if (document.fullscreenElement === panelRef.current) {
+        await document.exitFullscreen();
+      } else {
+        await panelRef.current?.requestFullscreen();
+      }
+    } catch (error) {
+      console.error('Failed to toggle artifact fullscreen:', error);
+    }
+  };
+
+  const resetPlotlyView = () => {
+    expandedFrameRef.current?.contentWindow?.postMessage(
+      { source: 'meera-artifact-viewer', command: 'reset' },
+      '*',
+    );
   };
 
   return (
@@ -288,7 +343,7 @@ export const InteractiveArtifact: React.FC<InteractiveArtifactProps> = ({ langua
               <span className="h-2.5 w-2.5 rounded-full bg-primary shadow-[0_0_0_4px_color-mix(in_srgb,var(--primary)_14%,transparent)]" />
             </span>
             <div className="min-w-0 leading-tight">
-              <div className="truncate text-sm font-semibold text-primary">{meta.title}</div>
+              <div className="truncate text-sm font-semibold text-primary">{displayTitle}</div>
               <div className="mt-0.5 truncate text-xs text-primary/55">{meta.eyebrow} · live preview</div>
             </div>
           </div>
@@ -302,15 +357,15 @@ export const InteractiveArtifact: React.FC<InteractiveArtifactProps> = ({ langua
             >
               <FiRefreshCw size={17} />
             </button>
-            <ToolbarButton label="Open interactive app" onClick={openArtifact} primary>
+            <ToolbarButton label={`Open ${meta.title.toLowerCase()} viewer`} onClick={openArtifact} primary>
               <FiMaximize2 size={16} />
-              <span className="hidden sm:inline">Open app</span>
+              <span className="hidden sm:inline">Open viewer</span>
               <span className="sm:hidden">Open</span>
             </ToolbarButton>
           </div>
         </div>
 
-        <div className="relative h-[clamp(240px,52vw,360px)] min-w-0 bg-white">
+        <div className="relative h-[clamp(300px,58vw,480px)] min-w-0 bg-white">
           {inlineLoading && (
             <div className="absolute inset-0 z-10 grid place-items-center bg-white">
               <div className="flex items-center gap-2 text-sm text-primary/65">
@@ -322,7 +377,7 @@ export const InteractiveArtifact: React.FC<InteractiveArtifactProps> = ({ langua
           <iframe
             key={`inline-${revision}`}
             srcDoc={srcDoc}
-            title={`${meta.title} preview`}
+            title={`${displayTitle} preview`}
             sandbox="allow-scripts allow-downloads"
             referrerPolicy="no-referrer"
             onLoad={() => setInlineLoading(false)}
@@ -355,7 +410,10 @@ export const InteractiveArtifact: React.FC<InteractiveArtifactProps> = ({ langua
               leaveFrom="translate-y-0 opacity-100 sm:scale-100"
               leaveTo="translate-y-4 opacity-0 sm:scale-[0.98] sm:translate-y-0"
             >
-              <Dialog.Panel className="grid h-[100dvh] w-full grid-rows-[auto_1fr] overflow-hidden bg-card shadow-2xl sm:h-full sm:rounded-3xl sm:border sm:border-white/20">
+              <Dialog.Panel
+                ref={panelRef}
+                className="grid h-[100dvh] w-full grid-rows-[auto_1fr] overflow-hidden bg-card shadow-2xl sm:h-full sm:rounded-3xl sm:border sm:border-white/20"
+              >
                 <header
                   className="flex min-h-16 items-center gap-2 border-b border-primary/10 bg-card px-3 sm:px-5"
                   style={{ paddingTop: 'env(safe-area-inset-top)' }}
@@ -372,7 +430,7 @@ export const InteractiveArtifact: React.FC<InteractiveArtifactProps> = ({ langua
 
                   <div className="min-w-0 flex-1">
                     <Dialog.Title className="truncate text-sm font-semibold text-primary sm:text-base">
-                      {meta.title}
+                      {displayTitle}
                     </Dialog.Title>
                     <Dialog.Description className="truncate text-xs text-primary/55">
                       {meta.eyebrow} · interactive workspace
@@ -380,6 +438,12 @@ export const InteractiveArtifact: React.FC<InteractiveArtifactProps> = ({ langua
                   </div>
 
                   <div className="flex shrink-0 items-center gap-1">
+                    {kind === 'plotly' && !showCode && (
+                      <ToolbarButton label="Reset chart view" onClick={resetPlotlyView}>
+                        <FiRotateCcw size={17} />
+                        <span className="hidden lg:inline">Reset view</span>
+                      </ToolbarButton>
+                    )}
                     <ToolbarButton label="Reload app" onClick={reload}>
                       <FiRefreshCw size={17} />
                       <span className="hidden md:inline">Reload</span>
@@ -387,6 +451,14 @@ export const InteractiveArtifact: React.FC<InteractiveArtifactProps> = ({ langua
                     <ToolbarButton label={showCode ? 'Show app' : 'Show code'} onClick={() => setShowCode(!showCode)} active={showCode}>
                       <FiCode size={18} />
                       <span className="hidden md:inline">{showCode ? 'Preview' : 'Code'}</span>
+                    </ToolbarButton>
+                    <ToolbarButton
+                      label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+                      onClick={toggleFullscreen}
+                      active={isFullscreen}
+                    >
+                      {isFullscreen ? <FiMinimize2 size={18} /> : <FiMaximize2 size={18} />}
+                      <span className="hidden xl:inline">{isFullscreen ? 'Exit full screen' : 'Full screen'}</span>
                     </ToolbarButton>
                   </div>
                 </header>
@@ -417,9 +489,10 @@ export const InteractiveArtifact: React.FC<InteractiveArtifactProps> = ({ langua
                         </div>
                       )}
                       <iframe
+                        ref={expandedFrameRef}
                         key={`expanded-${revision}`}
                         srcDoc={srcDoc}
-                        title={meta.title}
+                        title={displayTitle}
                         sandbox="allow-scripts allow-downloads"
                         referrerPolicy="no-referrer"
                         onLoad={() => setExpandedLoading(false)}
