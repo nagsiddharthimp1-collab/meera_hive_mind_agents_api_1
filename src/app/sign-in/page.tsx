@@ -197,7 +197,7 @@ function SignInClient() {
           </div>
 
           <div className="mt-auto space-y-3 mb-1">
-            <div className="text-center -translate-y-3">
+            <div className="text-center -translate-y-5">
               <H1 className="text-2xl md:text-3xl text-center">Your Personal Companion</H1>
             </div>
 
