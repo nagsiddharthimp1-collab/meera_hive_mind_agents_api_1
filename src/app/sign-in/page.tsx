@@ -61,33 +61,11 @@ function SearchParamsHandler({ enabled }: { enabled: boolean }) {
   );
 }
 
-const conversationMoments = [
-  {
-    number: '01',
-    title: 'On difficult days',
-    description: 'Talk things through, honestly and at your own pace.',
-    response: "I'm listening.",
-  },
-  {
-    number: '02',
-    title: 'When curiosity strikes',
-    description: 'Ask, explore, and learn something you did not know before.',
-    response: "Let's explore.",
-  },
-  {
-    number: '03',
-    title: 'In quiet moments',
-    description: 'Share what is on your mind, even when you do not know where to begin.',
-    response: 'You can start anywhere.',
-  },
-] as const;
-
 function SignInClient() {
   const searchParams = useSearchParams();
   const referralId = searchParams.get('referral_id');
   const router = useRouter();
   const [sessionStatus, setSessionStatus] = useState<SessionStatus>('loading');
-  const [activeMoment, setActiveMoment] = useState(0);
   const [openInBrowserState, setOpenInBrowserState] = useState<{
     isOpen: boolean;
     openUrl: string;
@@ -267,153 +245,93 @@ function SignInClient() {
       <section id="intelligence" className="relative overflow-hidden border-t border-primary/[0.07] bg-[#f4ede3]">
         <div className="pointer-events-none absolute -bottom-40 -left-36 h-[30rem] w-[30rem] rounded-full bg-[#49d8cf]/[0.08] blur-3xl" />
 
-        <div className="relative mx-auto w-full max-w-[1180px] px-5 py-20 sm:px-8 sm:py-28 lg:px-0 lg:py-32">
-          <div className="max-w-3xl lg:grid lg:max-w-none lg:grid-cols-[0.8fr_1.2fr] lg:items-end lg:gap-20">
+        <div className="relative mx-auto w-full max-w-7xl px-5 py-20 sm:px-9 sm:py-28 lg:px-14 lg:py-32">
+          <div className="mx-auto max-w-3xl text-center">
             <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-primary/45 sm:text-xs">
               Whatever the day brings
             </p>
-            <h2 className="mt-5 text-balance font-serif text-[clamp(2.75rem,5.5vw,5.5rem)] font-normal leading-[0.96] tracking-[-0.045em] lg:mt-0">
+            <h2 className="mt-5 text-balance font-serif text-[clamp(2.5rem,6vw,5.25rem)] font-normal leading-[0.98] tracking-[-0.04em]">
               A conversation can change how a moment feels.
             </h2>
           </div>
 
-          <div className="mt-16 grid items-stretch gap-10 lg:mt-24 lg:grid-cols-[0.82fr_1.18fr] lg:gap-16">
-            <div className="border-y border-primary/12">
-              {conversationMoments.map((moment, index) => {
-                const isActive = activeMoment === index;
-
-                return (
-                  <button
-                    key={moment.number}
-                    type="button"
-                    aria-pressed={isActive}
-                    onClick={() => setActiveMoment(index)}
-                    onMouseEnter={() => setActiveMoment(index)}
-                    onFocus={() => setActiveMoment(index)}
-                    className="group grid w-full grid-cols-[2.5rem_1fr_auto] gap-4 border-b border-primary/10 py-7 text-left last:border-b-0 sm:grid-cols-[3.5rem_1fr_auto] sm:py-8"
-                  >
-                    <span className="pt-1 font-serif text-sm italic text-primary/32">{moment.number}</span>
-                    <span>
-                      <span className="block font-serif text-2xl leading-tight sm:text-[1.8rem]">{moment.title}</span>
-                      <span className="mt-2 block max-w-sm text-sm leading-6 text-primary/50">{moment.description}</span>
-                      <span
-                        className={cn(
-                          'mt-4 items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-primary transition-all duration-300 lg:hidden',
-                          isActive ? 'flex' : 'hidden',
-                        )}
-                      >
-                        <span className="h-1.5 w-1.5 rounded-full bg-[#ed1c24]" />
-                        Meera: {moment.response}
-                      </span>
-                    </span>
-                    <span
-                      aria-hidden="true"
-                      className={cn(
-                        'mt-1 flex h-8 w-8 items-center justify-center rounded-full border text-sm transition-all duration-300',
-                        isActive
-                          ? 'rotate-45 border-primary bg-primary text-background'
-                          : 'border-primary/15 text-primary/45 group-hover:border-primary/35',
-                      )}
-                    >
-                      +
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="relative hidden min-h-[520px] items-center justify-center overflow-hidden rounded-[2.75rem] border border-primary/[0.08] bg-white/30 lg:flex">
-              <div aria-hidden="true" className="absolute h-[27rem] w-[27rem] rounded-full border border-primary/[0.07]" />
-              <div aria-hidden="true" className="absolute h-[19rem] w-[19rem] rounded-full border border-primary/[0.09]" />
-              <div aria-hidden="true" className="absolute h-[11rem] w-[11rem] rounded-full bg-primary/[0.05]" />
-              <span aria-hidden="true" className="absolute left-[18%] top-[23%] h-3 w-3 rounded-full bg-[#49d8cf] shadow-[0_0_28px_rgba(73,216,207,0.7)]" />
-              <span aria-hidden="true" className="absolute bottom-[20%] right-[21%] h-2 w-2 rounded-full bg-[#edb76c] shadow-[0_0_24px_rgba(237,183,108,0.7)]" />
-
-              <div
-                aria-hidden="true"
-                className="relative h-28 w-28 rounded-full bg-[radial-gradient(circle_at_32%_28%,#ff6568_0%,#ed1c24_34%,#6d0005_68%,#080000_100%)] shadow-[0_26px_55px_rgba(70,0,0,0.25)]"
-              />
-
-              <div
-                key={conversationMoments[activeMoment].response}
-                className="meera-response absolute right-[8%] top-[17%] max-w-[15rem] rounded-full border border-primary/10 bg-background px-6 py-4 text-center font-serif text-2xl shadow-[0_18px_50px_rgba(12,60,38,0.1)]"
+          <div className="mx-auto mt-16 grid max-w-6xl border-y border-primary/10 sm:grid-cols-3 sm:divide-x sm:divide-primary/10 lg:mt-20">
+            {[
+              ['01', 'On difficult days', 'Talk things through, honestly and at your own pace.'],
+              ['02', 'When curiosity strikes', 'Ask, explore, and learn something you did not know before.'],
+              ['03', 'In quiet moments', 'Share what is on your mind, even when you do not know where to begin.'],
+            ].map(([number, title, description]) => (
+              <article
+                key={number}
+                className="grid grid-cols-[2.5rem_1fr] gap-4 border-b border-primary/10 py-8 last:border-b-0 sm:block sm:border-b-0 sm:px-8 sm:py-10 lg:px-12 lg:py-14"
               >
-                {conversationMoments[activeMoment].response}
+                <span className="font-serif text-sm italic text-primary/35">{number}</span>
+                <div>
+                  <h3 className="font-serif text-2xl leading-tight sm:mt-8 sm:text-[1.7rem]">{title}</h3>
+                  <p className="mt-3 text-sm leading-6 text-primary/55">{description}</p>
+                </div>
+              </article>
+            ))}
+          </div>
+
+          <div className="relative mx-auto mt-16 max-w-6xl overflow-hidden rounded-[2rem] bg-primary text-background sm:mt-20 sm:rounded-[3rem]">
+            <div
+              aria-hidden="true"
+              className="absolute -right-14 -top-14 h-40 w-40 rounded-full bg-[radial-gradient(circle_at_32%_28%,#ff6568_0%,#ed1c24_34%,#6d0005_66%,#080000_100%)] opacity-90 shadow-[0_0_90px_rgba(237,28,36,0.26)] sm:-right-12 sm:-top-20 sm:h-64 sm:w-64 lg:right-8 lg:top-8"
+            />
+            <div aria-hidden="true" className="absolute bottom-0 left-1/2 h-px w-[82%] -translate-x-1/2 bg-background/12" />
+
+            <div className="relative px-7 py-11 sm:px-12 sm:py-16 lg:px-16 lg:py-20">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.34em] text-background/45 sm:text-xs">
+                The Hive Mind
+              </p>
+
+              <div className="mt-12 sm:mt-16 lg:mt-20">
+                <p className="font-serif text-[clamp(5.5rem,16vw,11rem)] font-normal leading-[0.68] tracking-[-0.07em]">
+                  7,850+
+                </p>
+                <h2 className="mt-7 max-w-3xl font-serif text-[clamp(2.5rem,6vw,5.5rem)] font-normal leading-[0.92] tracking-[-0.045em] sm:mt-10">
+                  Minds. One Hive Mind.
+                </h2>
               </div>
-              <div aria-hidden="true" className="absolute bottom-8 left-10 text-[10px] uppercase tracking-[0.28em] text-primary/35">
-                Meera is here
+
+              <div className="mt-12 flex flex-col gap-8 border-t border-background/15 pt-7 sm:mt-16 sm:flex-row sm:items-center sm:justify-between sm:pt-8">
+                <p className="max-w-md text-sm leading-6 text-background/58 sm:text-base">
+                  Powered by Conscious Intelligence (CI).
+                </p>
+
+                <button
+                  onClick={handleGoogleSignIn}
+                  className="group flex h-14 w-full items-center justify-center rounded-full bg-background px-7 text-sm font-semibold text-primary transition-transform duration-300 hover:-translate-y-0.5 sm:w-52"
+                >
+                  Talk to Meera
+                  <span className="ml-2 transition-transform duration-300 group-hover:translate-x-1" aria-hidden="true">
+                    →
+                  </span>
+                </button>
               </div>
             </div>
           </div>
+
+          <footer className="mt-16 flex flex-col items-center justify-between gap-5 border-t border-primary/10 pt-7 text-xs text-primary/45 sm:flex-row sm:mt-20">
+            <div className="inline-flex items-center gap-2">
+              <Image src="/icons/meera.svg" alt="" width={20} height={20} className="h-5 w-5" />
+              <span>Meera · Your personal companion</span>
+            </div>
+            <nav className="flex items-center gap-6" aria-label="Legal">
+              <Link href="/whitepaper" className="transition-colors hover:text-primary">
+                Whitepaper
+              </Link>
+              <Link href="/terms" className="transition-colors hover:text-primary">
+                Terms
+              </Link>
+              <Link href="/privacy" className="transition-colors hover:text-primary">
+                Privacy
+              </Link>
+            </nav>
+          </footer>
         </div>
       </section>
-
-      <section className="relative overflow-hidden bg-primary text-background">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 opacity-50"
-          style={{
-            backgroundImage: 'radial-gradient(circle, rgba(250,243,233,0.2) 1px, transparent 1.5px)',
-            backgroundSize: '32px 32px',
-            maskImage: 'radial-gradient(circle at 82% 42%, black 0%, transparent 58%)',
-          }}
-        />
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute -right-20 -top-20 h-60 w-60 rounded-full bg-[radial-gradient(circle_at_32%_28%,#ff6568_0%,#ed1c24_34%,#6d0005_68%,#080000_100%)] shadow-[0_0_120px_rgba(237,28,36,0.3)] sm:-right-8 sm:-top-16 sm:h-80 sm:w-80 lg:right-[7%] lg:top-1/2 lg:h-[25rem] lg:w-[25rem] lg:-translate-y-1/2"
-        />
-
-        <div className="relative mx-auto grid min-h-[92dvh] w-full max-w-[1180px] items-end gap-16 px-5 py-24 sm:px-8 sm:py-32 lg:min-h-[860px] lg:grid-cols-[1fr_0.9fr] lg:items-center lg:gap-24 lg:px-0 lg:py-36">
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.34em] text-background/45 sm:text-xs">
-              The intelligence behind Meera
-            </p>
-            <p className="mt-16 font-serif text-[clamp(6rem,17vw,13rem)] font-normal leading-[0.66] tracking-[-0.075em] sm:mt-20 lg:mt-28">
-              7,850+
-            </p>
-            <p className="mt-6 text-sm text-background/50">Contributing minds and growing.</p>
-          </div>
-
-          <div className="relative z-10 border-t border-background/18 pt-8 lg:border-l lg:border-t-0 lg:pl-14 lg:pt-0">
-            <h2 className="text-balance font-serif text-[clamp(2.8rem,6vw,5.7rem)] font-normal leading-[0.92] tracking-[-0.05em]">
-              Minds. One Hive Mind. One companion for you.
-            </h2>
-            <p className="mt-7 max-w-md text-sm leading-7 text-background/58 sm:text-base">
-              Powered by Conscious Intelligence (CI), bringing many minds into one thoughtful presence.
-            </p>
-
-            <button
-              onClick={handleGoogleSignIn}
-              className="group mt-10 flex h-14 w-full items-center justify-center rounded-full bg-background px-7 text-sm font-semibold text-primary transition-transform duration-300 hover:-translate-y-0.5 sm:w-56"
-            >
-              Talk to Meera
-              <span className="ml-2 transition-transform duration-300 group-hover:translate-x-1" aria-hidden="true">
-                →
-              </span>
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <footer className="bg-[#f4ede3]">
-        <div className="mx-auto flex w-full max-w-[1180px] flex-col items-center justify-between gap-5 px-5 py-8 text-xs text-primary/45 sm:flex-row sm:px-8 lg:px-0">
-          <div className="inline-flex items-center gap-2">
-            <Image src="/icons/meera.svg" alt="" width={20} height={20} className="h-5 w-5" />
-            <span>Meera · Your personal companion</span>
-          </div>
-          <nav className="flex items-center gap-6" aria-label="Legal">
-            <Link href="/whitepaper" className="transition-colors hover:text-primary">
-              Whitepaper
-            </Link>
-            <Link href="/terms" className="transition-colors hover:text-primary">
-              Terms
-            </Link>
-            <Link href="/privacy" className="transition-colors hover:text-primary">
-              Privacy
-            </Link>
-          </nav>
-        </div>
-      </footer>
       <OpenInBrowserDialog
         isOpen={openInBrowserState.isOpen}
         openUrl={openInBrowserState.openUrl}
