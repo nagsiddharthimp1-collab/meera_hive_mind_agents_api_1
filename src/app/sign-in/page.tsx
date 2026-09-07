@@ -166,113 +166,157 @@ function SignInClient() {
   }
 
   return (
-    <main className="relative min-h-[100dvh] overflow-hidden bg-background text-primary">
-      <div className="pointer-events-none absolute -right-24 -top-28 h-72 w-72 rounded-full bg-[#ed1c24]/10 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-36 -left-20 h-80 w-80 rounded-full bg-[#49d8cf]/10 blur-3xl" />
+    <main className="bg-background text-primary">
+      <section className="relative min-h-[100dvh] overflow-hidden">
+        <div className="pointer-events-none absolute -right-36 -top-44 h-[28rem] w-[28rem] rounded-full bg-[#ed1c24]/[0.07] blur-3xl" />
 
-      <div className="relative mx-auto flex min-h-[100dvh] w-full max-w-6xl flex-col px-5 sm:px-8 lg:px-12">
-        <header className="flex items-center justify-between py-5 sm:py-7">
-          <Link href="/" className="inline-flex items-center gap-2.5" aria-label="Meera home">
-            <Image
-              src="/icons/meera.svg"
-              alt=""
-              width={32}
-              height={32}
-              className="h-8 w-8"
-              priority
-            />
-            <span className="font-serif text-[22px] italic tracking-tight">
-              {(process.env.NEXT_PUBLIC_APP_NAME || 'meera').toLowerCase()}
-            </span>
-          </Link>
+        <div className="relative mx-auto flex min-h-[100dvh] w-full max-w-7xl flex-col px-5 sm:px-9 lg:px-14">
+          <header className="flex h-20 items-center justify-between sm:h-24">
+            <Link href="/" className="inline-flex items-center gap-2.5" aria-label="Meera home">
+              <Image src="/icons/meera.svg" alt="" width={34} height={34} className="h-8 w-8 sm:h-9 sm:w-9" priority />
+              <span className="font-serif text-[22px] italic tracking-tight sm:text-2xl">
+                {(process.env.NEXT_PUBLIC_APP_NAME || 'meera').toLowerCase()}
+              </span>
+            </Link>
 
-          <span className="rounded-full border border-primary/10 bg-white/55 px-3 py-1.5 text-[11px] font-medium tracking-wide text-primary/70 backdrop-blur-sm sm:text-xs">
-            7,850+ Minds
-          </span>
-        </header>
+            <a
+              href="#intelligence"
+              className="text-xs font-medium tracking-wide text-primary/55 transition-colors hover:text-primary sm:text-sm"
+            >
+              About Meera
+            </a>
+          </header>
 
-        <section className="grid flex-1 items-center gap-7 pb-8 pt-2 sm:gap-10 sm:pb-10 lg:grid-cols-[0.92fr_1.08fr] lg:gap-14 lg:py-10">
-          <div className="order-2 mx-auto w-full max-w-xl text-center lg:order-1 lg:mx-0 lg:text-left">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-primary/55 sm:mb-4">
-              Meera · Your personal companion
-            </p>
+          <div className="grid flex-1 items-center gap-8 pb-10 pt-3 sm:gap-12 sm:pb-14 lg:grid-cols-[0.9fr_1.1fr] lg:gap-16 lg:pb-16 lg:pt-0">
+            <div className="mx-auto w-full max-w-xl text-center lg:mx-0 lg:text-left">
+              <p className="mb-5 text-[11px] font-semibold uppercase tracking-[0.28em] text-primary/45 sm:text-xs">
+                Meet Meera
+              </p>
 
-            <h1 className="text-balance font-serif text-[clamp(2.5rem,7vw,4.9rem)] font-normal leading-[0.98] tracking-[-0.035em]">
-              Someone to talk to, whenever you need.
-            </h1>
+              <h1 className="text-balance font-serif text-[clamp(3.25rem,8vw,6.75rem)] font-normal leading-[0.9] tracking-[-0.045em]">
+                Your personal companion.
+              </h1>
 
-            <p className="mx-auto mt-5 max-w-lg text-[15px] leading-7 text-primary/68 sm:text-lg sm:leading-8 lg:mx-0">
-              Talk through bad days, learn something new, or simply have someone to talk to.
-            </p>
+              <p className="mx-auto mt-7 max-w-lg text-base leading-7 text-primary/62 sm:text-lg sm:leading-8 lg:mx-0">
+                Talk through bad days, learn something new, or simply have someone to talk to.
+              </p>
 
-            <div className="mx-auto mt-6 flex max-w-lg flex-wrap justify-center gap-2 lg:mx-0 lg:justify-start">
-              {['Talk through bad days', 'Learn something new', 'Simply talk'].map((item) => (
-                <span
-                  key={item}
-                  className="rounded-full border border-primary/10 bg-white/55 px-3.5 py-2 text-xs text-primary/75 shadow-[0_8px_24px_rgba(12,60,38,0.04)] backdrop-blur-sm sm:text-sm"
-                >
-                  {item}
+              <button
+                onClick={handleGoogleSignIn}
+                className={cn(
+                  'group relative mx-auto mt-8 flex h-14 w-full max-w-sm cursor-pointer items-center justify-center rounded-full bg-primary px-8 text-[15px] font-medium text-background transition-all duration-300 lg:mx-0',
+                  'shadow-[0_16px_40px_rgba(12,60,38,0.16)] hover:-translate-y-0.5 hover:shadow-[0_20px_46px_rgba(12,60,38,0.22)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-4 focus-visible:ring-offset-background',
+                )}
+              >
+                <FcGoogle className="absolute left-5 rounded-full bg-white p-1 text-[28px]" aria-hidden="true" />
+                <span>Talk to Meera</span>
+                <span className="ml-2 transition-transform duration-300 group-hover:translate-x-1" aria-hidden="true">
+                  →
                 </span>
-              ))}
+              </button>
+
+              <p className="mt-3 text-[11px] tracking-wide text-primary/38">Continue securely with Google</p>
+            </div>
+
+            <div className="relative flex items-center justify-center">
+              <div className="pointer-events-none absolute inset-[18%] rounded-full bg-white/70 blur-3xl" />
+              <Image
+                src="/images/home.svg"
+                alt="People sharing thoughts, questions, and feelings with Meera"
+                width={636}
+                height={700}
+                priority
+                sizes="(max-width: 1024px) 92vw, 54vw"
+                className="relative mx-auto h-auto w-full max-w-[520px] drop-shadow-[0_28px_50px_rgba(12,60,38,0.08)] sm:max-w-[590px] lg:max-w-[650px]"
+              />
+            </div>
+          </div>
+
+          <a
+            href="#intelligence"
+            aria-label="Discover more about Meera"
+            className="mb-6 hidden self-center text-[10px] uppercase tracking-[0.3em] text-primary/35 transition-colors hover:text-primary/70 lg:block"
+          >
+            Discover ↓
+          </a>
+        </div>
+      </section>
+
+      <section id="intelligence" className="relative overflow-hidden border-t border-primary/[0.07] bg-[#f4ede3]">
+        <div className="pointer-events-none absolute -bottom-40 -left-36 h-[30rem] w-[30rem] rounded-full bg-[#49d8cf]/[0.08] blur-3xl" />
+
+        <div className="relative mx-auto w-full max-w-7xl px-5 py-20 sm:px-9 sm:py-28 lg:px-14 lg:py-32">
+          <div className="mx-auto max-w-3xl text-center">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-primary/45 sm:text-xs">
+              Whatever the day brings
+            </p>
+            <h2 className="mt-5 text-balance font-serif text-[clamp(2.5rem,6vw,5.25rem)] font-normal leading-[0.98] tracking-[-0.04em]">
+              A conversation can change how a moment feels.
+            </h2>
+          </div>
+
+          <div className="mx-auto mt-16 grid max-w-6xl border-y border-primary/10 sm:grid-cols-3 sm:divide-x sm:divide-primary/10 lg:mt-20">
+            {[
+              ['01', 'On difficult days', 'Talk things through, honestly and at your own pace.'],
+              ['02', 'When curiosity strikes', 'Ask, explore, and learn something you did not know before.'],
+              ['03', 'In quiet moments', 'Share what is on your mind, even when you do not know where to begin.'],
+            ].map(([number, title, description]) => (
+              <article
+                key={number}
+                className="grid grid-cols-[2.5rem_1fr] gap-4 border-b border-primary/10 py-8 last:border-b-0 sm:block sm:border-b-0 sm:px-8 sm:py-10 lg:px-12 lg:py-14"
+              >
+                <span className="font-serif text-sm italic text-primary/35">{number}</span>
+                <div>
+                  <h3 className="font-serif text-2xl leading-tight sm:mt-8 sm:text-[1.7rem]">{title}</h3>
+                  <p className="mt-3 text-sm leading-6 text-primary/55">{description}</p>
+                </div>
+              </article>
+            ))}
+          </div>
+
+          <div className="mx-auto mt-16 grid max-w-6xl overflow-hidden rounded-[2rem] bg-primary text-background sm:mt-20 sm:rounded-[2.75rem] lg:grid-cols-[1fr_auto] lg:items-end">
+            <div className="p-8 sm:p-12 lg:p-16">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-background/50 sm:text-xs">
+                Conscious Intelligence
+              </p>
+              <h2 className="mt-5 max-w-3xl font-serif text-[clamp(2.6rem,6vw,5rem)] font-normal leading-[0.95] tracking-[-0.04em]">
+                7,850+ Minds. One Hive Mind.
+              </h2>
+              <p className="mt-6 max-w-xl text-sm leading-7 text-background/65 sm:text-base">
+                Meera is powered by Conscious Intelligence (CI) through the Hive Mind—bringing many minds into one thoughtful companion.
+              </p>
             </div>
 
             <button
               onClick={handleGoogleSignIn}
-              className={cn(
-                'group relative mx-auto mt-7 flex h-14 w-full max-w-md cursor-pointer items-center justify-center rounded-full bg-primary px-8 text-base font-medium text-background shadow-[0_14px_35px_rgba(12,60,38,0.18)] transition-all duration-200',
-                'hover:-translate-y-0.5 hover:shadow-[0_18px_40px_rgba(12,60,38,0.24)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-4 focus-visible:ring-offset-background lg:mx-0',
-              )}
+              className="group m-8 mt-0 flex h-14 items-center justify-center rounded-full border border-background/25 px-7 text-sm font-medium text-background transition-colors hover:bg-background hover:text-primary sm:m-12 sm:mt-0 lg:m-16 lg:ml-0 lg:w-48"
             >
-              <FcGoogle className="absolute left-5 rounded-full bg-white p-1 text-[28px]" aria-hidden="true" />
-              <span>Talk to Meera</span>
-              <span className="ml-2 transition-transform duration-200 group-hover:translate-x-1" aria-hidden="true">
+              Talk to Meera
+              <span className="ml-2 transition-transform duration-300 group-hover:translate-x-1" aria-hidden="true">
                 →
               </span>
             </button>
-
-            <p className="mt-3 text-xs text-primary/45">Continue securely with Google</p>
-
-            <div className="mx-auto mt-7 max-w-lg border-t border-primary/10 pt-5 lg:mx-0">
-              <p className="text-sm leading-6 text-primary/62">
-                Powered by <span className="font-semibold text-primary">Conscious Intelligence (CI)</span>{' '}
-                through the Hive Mind — 7,850+ Minds.
-              </p>
-            </div>
           </div>
 
-          <div className="order-1 flex items-center justify-center lg:order-2">
-            <div className="relative w-full max-w-[430px] sm:max-w-[520px]">
-              <div className="absolute inset-[12%] rounded-full bg-white/50 blur-2xl" />
-              <div className="relative rounded-[32px] border border-primary/[0.07] bg-white/25 px-2 py-3 shadow-[0_24px_80px_rgba(12,60,38,0.08)] backdrop-blur-sm sm:px-6 sm:py-7 lg:rounded-[44px]">
-                <Image
-                  src="/images/home.svg"
-                  alt="People sharing thoughts, questions, and feelings with Meera"
-                  width={636}
-                  height={700}
-                  priority
-                  sizes="(max-width: 1024px) 92vw, 50vw"
-                  className="mx-auto h-auto w-full max-h-[42vh] object-contain sm:max-h-[50vh] lg:max-h-[620px]"
-                />
-              </div>
+          <footer className="mt-16 flex flex-col items-center justify-between gap-5 border-t border-primary/10 pt-7 text-xs text-primary/45 sm:flex-row sm:mt-20">
+            <div className="inline-flex items-center gap-2">
+              <Image src="/icons/meera.svg" alt="" width={20} height={20} className="h-5 w-5" />
+              <span>Meera · Your personal companion</span>
             </div>
-          </div>
-        </section>
-
-        <footer className="flex flex-col items-center justify-between gap-3 border-t border-primary/[0.08] py-5 text-xs text-primary/50 sm:flex-row">
-          <span>Meera · Your personal companion</span>
-          <nav className="flex items-center gap-5" aria-label="Legal">
-            <Link href="/whitepaper" className="transition-colors hover:text-primary">
-              Whitepaper
-            </Link>
-            <Link href="/terms" className="transition-colors hover:text-primary">
-              Terms
-            </Link>
-            <Link href="/privacy" className="transition-colors hover:text-primary">
-              Privacy
-            </Link>
-          </nav>
-        </footer>
-      </div>
+            <nav className="flex items-center gap-6" aria-label="Legal">
+              <Link href="/whitepaper" className="transition-colors hover:text-primary">
+                Whitepaper
+              </Link>
+              <Link href="/terms" className="transition-colors hover:text-primary">
+                Terms
+              </Link>
+              <Link href="/privacy" className="transition-colors hover:text-primary">
+                Privacy
+              </Link>
+            </nav>
+          </footer>
+        </div>
+      </section>
       <OpenInBrowserDialog
         isOpen={openInBrowserState.isOpen}
         openUrl={openInBrowserState.openUrl}
