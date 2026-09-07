@@ -167,7 +167,7 @@ function SignInClient() {
   }
 
   return (
-    <main className="h-[100dvh] flex flex-col px-2 py-3 md:px-4 md:py-4 lg:px-0 max-w-[450px] mx-auto w-full overflow-hidden">
+    <main className="h-[100dvh] flex flex-col px-2 pt-3 pb-6 md:px-4 md:pt-4 md:pb-6 lg:px-0 max-w-[450px] mx-auto w-full overflow-hidden">
       <div className="flex flex-col h-full">
         <div className="flex items-center md:justify-center gap-2">
           <Link href="/" className="inline-flex items-center gap-2">
