@@ -2,7 +2,6 @@
 
 import { SuccessDialog } from '@/components/SuccessDialog';
 import { OpenInBrowserDialog } from '@/components/auth/OpenInBrowserDialog';
-import { H1, Italic } from '@/components/ui/Typography';
 import {
   breakAuthRedirectLoop,
   clearAuthRedirectTrace,
@@ -167,68 +166,112 @@ function SignInClient() {
   }
 
   return (
-    <main className="h-[100dvh] flex flex-col px-2 pt-3 pb-6 md:px-4 md:pt-4 md:pb-6 lg:px-0 max-w-[450px] mx-auto w-full overflow-hidden">
-      <div className="flex flex-col h-full">
-        <div className="flex items-center md:justify-center gap-2">
-          <Link href="/" className="inline-flex items-center gap-2">
+    <main className="relative min-h-[100dvh] overflow-hidden bg-background text-primary">
+      <div className="pointer-events-none absolute -right-24 -top-28 h-72 w-72 rounded-full bg-[#ed1c24]/10 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-36 -left-20 h-80 w-80 rounded-full bg-[#49d8cf]/10 blur-3xl" />
+
+      <div className="relative mx-auto flex min-h-[100dvh] w-full max-w-6xl flex-col px-5 sm:px-8 lg:px-12">
+        <header className="flex items-center justify-between py-5 sm:py-7">
+          <Link href="/" className="inline-flex items-center gap-2.5" aria-label="Meera home">
             <Image
               src="/icons/meera.svg"
-              alt={process.env.NEXT_PUBLIC_APP_NAME || ''}
-              width={24}
-              height={24}
-              className="w-6 h-6"
-            />
-            <H1 className="text-lg text-primary font-sans">
-              <Italic>{`${(process.env.NEXT_PUBLIC_APP_NAME || 'meera')?.toLowerCase()}`}</Italic>
-            </H1>
-          </Link>
-        </div>
-
-        <div className="flex flex-col flex-1 justify-center">
-          <div className="flex justify-center items-center flex-1">
-            <Image
-              src="/images/home.svg"
-              alt="Welcome"
-              width={400}
-              height={400}
+              alt=""
+              width={32}
+              height={32}
+              className="h-8 w-8"
               priority
-              className="w-full h-auto max-w-[388px] md:max-w-[445px] max-h-[55vh] md:max-h-[63vh] object-contain translate-x-[5px]"
             />
-          </div>
+            <span className="font-serif text-[22px] italic tracking-tight">
+              {(process.env.NEXT_PUBLIC_APP_NAME || 'meera').toLowerCase()}
+            </span>
+          </Link>
 
-          <div className="mt-auto space-y-3 mb-1">
-            <div className="text-center -translate-y-5">
-              <H1 className="text-2xl md:text-3xl text-center">Your Personal Companion</H1>
+          <span className="rounded-full border border-primary/10 bg-white/55 px-3 py-1.5 text-[11px] font-medium tracking-wide text-primary/70 backdrop-blur-sm sm:text-xs">
+            7,850+ Minds
+          </span>
+        </header>
+
+        <section className="grid flex-1 items-center gap-7 pb-8 pt-2 sm:gap-10 sm:pb-10 lg:grid-cols-[0.92fr_1.08fr] lg:gap-14 lg:py-10">
+          <div className="order-2 mx-auto w-full max-w-xl text-center lg:order-1 lg:mx-0 lg:text-left">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-primary/55 sm:mb-4">
+              Meera · Your personal companion
+            </p>
+
+            <h1 className="text-balance font-serif text-[clamp(2.5rem,7vw,4.9rem)] font-normal leading-[0.98] tracking-[-0.035em]">
+              Someone to talk to, whenever you need.
+            </h1>
+
+            <p className="mx-auto mt-5 max-w-lg text-[15px] leading-7 text-primary/68 sm:text-lg sm:leading-8 lg:mx-0">
+              Talk through bad days, learn something new, or simply have someone to talk to.
+            </p>
+
+            <div className="mx-auto mt-6 flex max-w-lg flex-wrap justify-center gap-2 lg:mx-0 lg:justify-start">
+              {['Talk through bad days', 'Learn something new', 'Simply talk'].map((item) => (
+                <span
+                  key={item}
+                  className="rounded-full border border-primary/10 bg-white/55 px-3.5 py-2 text-xs text-primary/75 shadow-[0_8px_24px_rgba(12,60,38,0.04)] backdrop-blur-sm sm:text-sm"
+                >
+                  {item}
+                </span>
+              ))}
             </div>
 
             <button
               onClick={handleGoogleSignIn}
               className={cn(
-                'flex items-center justify-center font-sans transition-all duration-200 font-[200] cursor-pointer',
-                'w-full',
-                'bg-transparent border-2 border-primary text-primary hover:bg-primary/5',
-                'text-lg px-8 py-3',
-                'rounded-full',
-                'h-12 relative group bg-white hover:bg-white font-[400] border border-secondary/30 max-w-[400px] mx-auto',
+                'group relative mx-auto mt-7 flex h-14 w-full max-w-md cursor-pointer items-center justify-center rounded-full bg-primary px-8 text-base font-medium text-background shadow-[0_14px_35px_rgba(12,60,38,0.18)] transition-all duration-200',
+                'hover:-translate-y-0.5 hover:shadow-[0_18px_40px_rgba(12,60,38,0.24)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-4 focus-visible:ring-offset-background lg:mx-0',
               )}
             >
-              <FcGoogle className="absolute left-6 text-2xl" />
-              <span className="text-base font-[400] ml-6">Sign Up / Log In </span>
+              <FcGoogle className="absolute left-5 rounded-full bg-white p-1 text-[28px]" aria-hidden="true" />
+              <span>Talk to Meera</span>
+              <span className="ml-2 transition-transform duration-200 group-hover:translate-x-1" aria-hidden="true">
+                →
+              </span>
             </button>
 
-            <div className="flex justify-center gap-4 mt-3">
-              <Link href="/whitepaper" className="text-xs font-[500] text-primary hover:underline">
-                Whitepaper
-              </Link>
-              <Link href="/terms" className="text-xs font-[500] text-primary hover:underline">
-                Terms
-              </Link>
-              <Link href="/privacy" className="text-xs font-[500] text-primary hover:underline">
-                Privacy
-              </Link>
+            <p className="mt-3 text-xs text-primary/45">Continue securely with Google</p>
+
+            <div className="mx-auto mt-7 max-w-lg border-t border-primary/10 pt-5 lg:mx-0">
+              <p className="text-sm leading-6 text-primary/62">
+                Powered by <span className="font-semibold text-primary">Conscious Intelligence (CI)</span>{' '}
+                through the Hive Mind — 7,850+ Minds.
+              </p>
             </div>
           </div>
-        </div>
+
+          <div className="order-1 flex items-center justify-center lg:order-2">
+            <div className="relative w-full max-w-[430px] sm:max-w-[520px]">
+              <div className="absolute inset-[12%] rounded-full bg-white/50 blur-2xl" />
+              <div className="relative rounded-[32px] border border-primary/[0.07] bg-white/25 px-2 py-3 shadow-[0_24px_80px_rgba(12,60,38,0.08)] backdrop-blur-sm sm:px-6 sm:py-7 lg:rounded-[44px]">
+                <Image
+                  src="/images/home.svg"
+                  alt="People sharing thoughts, questions, and feelings with Meera"
+                  width={636}
+                  height={700}
+                  priority
+                  sizes="(max-width: 1024px) 92vw, 50vw"
+                  className="mx-auto h-auto w-full max-h-[42vh] object-contain sm:max-h-[50vh] lg:max-h-[620px]"
+                />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <footer className="flex flex-col items-center justify-between gap-3 border-t border-primary/[0.08] py-5 text-xs text-primary/50 sm:flex-row">
+          <span>Meera · Your personal companion</span>
+          <nav className="flex items-center gap-5" aria-label="Legal">
+            <Link href="/whitepaper" className="transition-colors hover:text-primary">
+              Whitepaper
+            </Link>
+            <Link href="/terms" className="transition-colors hover:text-primary">
+              Terms
+            </Link>
+            <Link href="/privacy" className="transition-colors hover:text-primary">
+              Privacy
+            </Link>
+          </nav>
+        </footer>
       </div>
       <OpenInBrowserDialog
         isOpen={openInBrowserState.isOpen}

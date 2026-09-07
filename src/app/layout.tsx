@@ -14,29 +14,29 @@ export async function generateMetadata(): Promise<Metadata> {
 
   return {
     metadataBase: new URL(siteUrl),
-    title: `${appName}`,
-    description: "World's first Conscious Intelligence (CI)",
+    title: `${appName} — Your Personal Companion`,
+    description: 'Talk through bad days, learn something new, or simply have someone to talk to.',
     openGraph: {
-      title: `${appName}`,
-      description: "World's first Conscious Intelligence (CI)",
+      title: `${appName} — Your Personal Companion`,
+      description: 'Talk through bad days, learn something new, or simply have someone to talk to.',
       url: canonicalUrl,
       siteName: `${appName}`,
       type: 'website',
       images: [
         {
           url: new URL('/banner.png', canonicalUrl).toString(),
-          alt: `${appName} - World's first Conscious Intelligence (CI)`,
+          alt: `${appName} — Your Personal Companion`,
         },
       ],
     },
     twitter: {
       card: 'summary_large_image',
-      title: `${appName}`,
-      description: "World's first Conscious Intelligence (CI)",
+      title: `${appName} — Your Personal Companion`,
+      description: 'Talk through bad days, learn something new, or simply have someone to talk to.',
       images: [
         {
           url: new URL('/banner.png', canonicalUrl).toString(),
-          alt: `${appName}  - World's first Conscious Intelligence (CI)`,
+          alt: `${appName} — Your Personal Companion`,
         },
       ],
     },
