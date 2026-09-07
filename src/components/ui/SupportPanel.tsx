@@ -26,6 +26,12 @@ export const SupportPanel = ({ isOpen, onClose }: SupportPanelProps) => {
       },
     },
     {
+      label: 'Whitepaper',
+      onClick: () => {
+        window.open('/whitepaper', '_blank', 'noopener,noreferrer');
+      },
+    },
+    {
       label: 'Terms of Service',
       onClick: () => {
         window.open('/terms', '_blank', 'noopener,noreferrer');

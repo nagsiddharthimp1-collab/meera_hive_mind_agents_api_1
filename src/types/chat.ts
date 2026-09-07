@@ -6,6 +6,7 @@ export interface ChatMessage {
   content_type: 'assistant' | 'user' | 'system';
   timestamp: string;
   attachments?: ChatMessageAttachment[];
+  message_type?: string | null;
 }
 
 export interface FormattedChatMessage {
@@ -71,6 +72,7 @@ export interface ChatMessageFromServer {
   attachments?: ChatAttachmentFromServer[];
   is_call?: boolean;
   session_id?: string;
+  message_type?: string | null;
   finish_reason?: string | null;
   failed?: boolean;
   try_number?: number;

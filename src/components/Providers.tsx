@@ -15,8 +15,8 @@ type ProvidersProps = {
 };
 
 const apiOptions: LiveClientOptions = {
-  // Browser-direct Live API access is intentionally disabled.
-  // Keep this empty until a server-mediated token/relay architecture is introduced.
+  // Browser-direct Live API access remains intentionally disabled.
+  // Voice now connects through a server-mediated relay token path.
   apiKey: '',
 };
 

@@ -1,12 +1,17 @@
 'use client';
 
 import hljs from 'highlight.js';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { FiCheck, FiCopy } from 'react-icons/fi';
 import 'highlight.js/styles/atom-one-light.css';
 
 const SAFE_LINK_PROTOCOLS = new Set(['http:', 'https:', 'mailto:', 'tel:']);
 const DATA_IMAGE_URL_RE = /^data:image\/(?:png|jpe?g|gif|webp|bmp);base64,[a-z0-9+/=\s]+$/i;
+const LIVE_HTML_LANGUAGES = new Set(['live-html', 'preview-html', 'html-live']);
+const LIVE_REACT_LANGUAGES = new Set(['live-react', 'preview-react', 'react-live', 'live-jsx']);
+const PLOTLY_LANGUAGES = new Set(['plotly', 'live-plotly', 'interactive-graph']);
+const PREVIEW_CSP =
+  "default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' https: http:; style-src 'unsafe-inline' https: http:; img-src data: blob: https: http:; font-src data: https: http:; connect-src https: http:;";
 
 const sanitizeLinkHref = (rawHref: unknown): string | null => {
   if (typeof rawHref !== 'string') return null;
@@ -38,6 +43,208 @@ const sanitizeImageSrc = (rawSrc: unknown): string | null => {
   } catch {
     return null;
   }
+};
+
+const normalizeCodeLanguage = (language: string): string => String(language || '').toLowerCase().trim();
+
+const escapeClosingScriptTags = (source: string): string => source.replace(/<\/script/gi, '<\\/script');
+
+const stripReactImportsAndExports = (source: string): string =>
+  source
+    .replace(/^\s*import\s.+?;?\s*$/gm, '')
+    .replace(/^\s*export\s+default\s+/gm, '')
+    .replace(/^\s*export\s+\{[^}]*\};?\s*$/gm, '')
+    .trim();
+
+const stripMarkdownFences = (source: string): string =>
+  source
+    .replace(/^\s*```[a-z0-9+#-]*\s*$/gim, '')
+    .replace(/^\s*```\s*$/gim, '')
+    .trim();
+
+const toSafeErrorMessage = (error: unknown): string => {
+  if (error instanceof Error && error.message) return error.message;
+  return 'Unable to parse preview payload.';
+};
+
+const buildHtmlPreviewDocument = (source: string): string => {
+  const hasHtmlTag = /<html[\s>]/i.test(source);
+  const htmlBody = hasHtmlTag
+    ? source
+    : `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="Content-Security-Policy" content="${PREVIEW_CSP}" />
+    <style>
+      body {
+        margin: 0;
+        padding: 16px;
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      }
+    </style>
+  </head>
+  <body>
+${source}
+  </body>
+</html>`;
+
+  return htmlBody;
+};
+
+const buildReactPreviewDocument = (source: string): string => {
+  const appSource = escapeClosingScriptTags(stripMarkdownFences(stripReactImportsAndExports(source)));
+  const encodedSource = JSON.stringify(appSource);
+
+  return `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="Content-Security-Policy" content="${PREVIEW_CSP}" />
+    <style>
+      html, body { margin: 0; padding: 0; }
+      body {
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+        padding: 16px;
+      }
+      #root { min-height: 200px; }
+      .preview-error {
+        color: #b91c1c;
+        background: #fef2f2;
+        border: 1px solid #fecaca;
+        border-radius: 8px;
+        padding: 12px;
+        white-space: pre-wrap;
+      }
+    </style>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      (function bootReactPreview() {
+        const mount = document.getElementById('root');
+        const showError = (message) => {
+          const safe = String(message || 'Runtime error').replace(/</g, '&lt;');
+          mount.innerHTML = '<div class="preview-error">' + safe + '</div>';
+        };
+
+        try {
+          const source = ${encodedSource};
+          const transformed = Babel.transform(source, {
+            filename: 'preview.tsx',
+            sourceType: 'script',
+            presets: [
+              ['react', { runtime: 'classic' }],
+              ['typescript', { isTSX: true, allExtensions: true }],
+            ],
+          }).code;
+
+          class PreviewErrorBoundary extends React.Component {
+            constructor(props) {
+              super(props);
+              this.state = { error: null };
+            }
+            static getDerivedStateFromError(error) {
+              return { error };
+            }
+            render() {
+              if (this.state.error) {
+                const text = this.state.error && this.state.error.message
+                  ? this.state.error.message
+                  : String(this.state.error || 'Runtime error');
+                return React.createElement(
+                  'div',
+                  { className: 'preview-error' },
+                  text
+                );
+              }
+              return this.props.children;
+            }
+          }
+
+          const factory = new Function(
+            'React',
+            'ReactDOM',
+            'Plotly',
+            'const { useState, useEffect, useMemo, useCallback, useRef, useReducer, useContext, useLayoutEffect } = React;\\n' +
+              transformed +
+              '\\nreturn typeof App !== "undefined" ? App : null;'
+          );
+          const Candidate = factory(React, ReactDOM, window.Plotly);
+
+          if (typeof Candidate === 'function') {
+            const root = ReactDOM.createRoot(mount);
+            root.render(
+              React.createElement(
+                PreviewErrorBoundary,
+                null,
+                React.createElement(Candidate)
+              )
+            );
+            return;
+          }
+          showError('Define an App component for live-react preview.');
+        } catch (error) {
+          const message = error && error.message ? error.message : String(error || 'Runtime error');
+          showError(message);
+        }
+      })();
+    </script>
+  </body>
+</html>`;
+};
+
+const buildPlotlyPreviewDocument = (spec: Record<string, unknown>): string => {
+  const safeSpec = JSON.stringify(spec);
+  return `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="Content-Security-Policy" content="${PREVIEW_CSP}" />
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+    <style>
+      html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #ffffff; }
+      #plot { width: 100%; height: 100%; min-height: 280px; }
+      .plot-error {
+        color: #b91c1c;
+        background: #fef2f2;
+        border: 1px solid #fecaca;
+        border-radius: 8px;
+        margin: 16px;
+        padding: 12px;
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="plot"></div>
+    <script>
+      (function renderPlot() {
+        try {
+          const spec = ${safeSpec};
+          const data = Array.isArray(spec.data) ? spec.data : [];
+          const layout = (spec.layout && typeof spec.layout === 'object') ? spec.layout : {};
+          const config = (spec.config && typeof spec.config === 'object') ? spec.config : {};
+          layout.autosize = layout.autosize !== false;
+          config.responsive = config.responsive !== false;
+          config.displaylogo = false;
+          Plotly.newPlot('plot', data, layout, config);
+        } catch (error) {
+          const el = document.getElementById('plot');
+          const message = (error && error.message) ? error.message : String(error || 'Plot error');
+          el.outerHTML = '<div class="plot-error">' + message.replace(/</g, '&lt;') + '</div>';
+        }
+      })();
+    </script>
+  </body>
+</html>`;
 };
 
 // Props that react-markdown passes to custom components
@@ -95,7 +302,7 @@ interface CodeBlockProps {
   code: string;
 }
 
-export const CodeBlock: React.FC<CodeBlockProps> = ({ language, code }) => {
+const StaticCodeBlock: React.FC<CodeBlockProps> = ({ language, code }) => {
   const { copied, copyText } = useCopyToClipboard();
   const displayLanguage = language ? language.charAt(0).toUpperCase() + language.slice(1) : '';
 
@@ -135,6 +342,153 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({ language, code }) => {
       </pre>
     </div>
   );
+};
+
+const LivePreviewCodeBlock: React.FC<CodeBlockProps> = ({ language, code }) => {
+  const { copied, copyText } = useCopyToClipboard();
+  const [showCode, setShowCode] = useState(false);
+  const [previewKey, setPreviewKey] = useState(0);
+  const normalizedLanguage = normalizeCodeLanguage(language);
+  const isReactPreview = LIVE_REACT_LANGUAGES.has(normalizedLanguage);
+  const displayLanguage = isReactPreview ? 'Live React Preview' : 'Live HTML Preview';
+
+  const srcDoc = useMemo(
+    () => (isReactPreview ? buildReactPreviewDocument(code) : buildHtmlPreviewDocument(code)),
+    [code, isReactPreview],
+  );
+
+  return (
+    <div className="my-4 rounded-md border border-gray-200 overflow-hidden bg-white">
+      <div className="px-3 py-1.5 flex items-center justify-between bg-gray-100 border-b border-gray-200 gap-2">
+        <span className="text-xs font-semibold text-gray-700">{displayLanguage}</span>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setShowCode((v) => !v)}
+            className="px-2 py-1 rounded text-xs text-primary/80 hover:text-primary hover:bg-black/5 transition-colors"
+            title={showCode ? 'Show preview' : 'Show code'}
+          >
+            {showCode ? 'Preview' : 'Code'}
+          </button>
+          <button
+            onClick={() => setPreviewKey((k) => k + 1)}
+            className="px-2 py-1 rounded text-xs text-primary/80 hover:text-primary hover:bg-black/5 transition-colors"
+            title="Reload preview"
+          >
+            Reload
+          </button>
+          <button
+            onClick={() => copyText(code)}
+            className="p-0.5 rounded text-xs hover:bg-black/10 transition-colors focus:outline-none dark:hover:bg-white/10"
+            title={copied ? 'Copied!' : 'Copy code'}
+          >
+            {copied ? (
+              <FiCheck size={14} className="text-primary" />
+            ) : (
+              <FiCopy size={14} className="text-primary/60 hover:text-primary/80" />
+            )}
+          </button>
+        </div>
+      </div>
+      {showCode ? (
+        <pre className="text-[15px] font-sans overflow-x-auto whitespace-pre-wrap break-words p-3 bg-gray-50">
+          <code className={`language-${language || 'plaintext'} hljs`}>{code}</code>
+        </pre>
+      ) : (
+        <iframe
+          key={`${normalizedLanguage}-${previewKey}`}
+          title={displayLanguage}
+          srcDoc={srcDoc}
+          sandbox="allow-scripts allow-popups"
+          className="w-full h-[420px] border-0 bg-white"
+          loading="lazy"
+        />
+      )}
+    </div>
+  );
+};
+
+const PlotlyCodeBlock: React.FC<CodeBlockProps> = ({ code }) => {
+  const { copied, copyText } = useCopyToClipboard();
+  const [showCode, setShowCode] = useState(false);
+  const [previewKey, setPreviewKey] = useState(0);
+
+  const parsed = useMemo(() => {
+    try {
+      const raw = JSON.parse(code) as Record<string, unknown>;
+      return { spec: raw, error: null as string | null };
+    } catch (error) {
+      return { spec: null as Record<string, unknown> | null, error: toSafeErrorMessage(error) };
+    }
+  }, [code]);
+
+  const srcDoc = useMemo(() => (parsed.spec ? buildPlotlyPreviewDocument(parsed.spec) : ''), [parsed.spec]);
+
+  return (
+    <div className="my-4 rounded-md border border-gray-200 overflow-hidden bg-white">
+      <div className="px-3 py-1.5 flex items-center justify-between bg-gray-100 border-b border-gray-200 gap-2">
+        <span className="text-xs font-semibold text-gray-700">Interactive Graph (Plotly)</span>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setShowCode((v) => !v)}
+            className="px-2 py-1 rounded text-xs text-primary/80 hover:text-primary hover:bg-black/5 transition-colors"
+            title={showCode ? 'Show preview' : 'Show code'}
+          >
+            {showCode ? 'Preview' : 'Code'}
+          </button>
+          <button
+            onClick={() => setPreviewKey((k) => k + 1)}
+            className="px-2 py-1 rounded text-xs text-primary/80 hover:text-primary hover:bg-black/5 transition-colors"
+            title="Reload graph"
+          >
+            Reload
+          </button>
+          <button
+            onClick={() => copyText(code)}
+            className="p-0.5 rounded text-xs hover:bg-black/10 transition-colors focus:outline-none dark:hover:bg-white/10"
+            title={copied ? 'Copied!' : 'Copy code'}
+          >
+            {copied ? (
+              <FiCheck size={14} className="text-primary" />
+            ) : (
+              <FiCopy size={14} className="text-primary/60 hover:text-primary/80" />
+            )}
+          </button>
+        </div>
+      </div>
+
+      {parsed.error ? (
+        <div className="m-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          Invalid Plotly JSON: {parsed.error}
+        </div>
+      ) : null}
+
+      {showCode || parsed.error ? (
+        <pre className="text-[15px] font-sans overflow-x-auto whitespace-pre-wrap break-words p-3 bg-gray-50">
+          <code className="language-json hljs">{code}</code>
+        </pre>
+      ) : (
+        <iframe
+          key={`plotly-${previewKey}`}
+          title="Interactive Graph Preview"
+          srcDoc={srcDoc}
+          sandbox="allow-scripts"
+          className="w-full h-[440px] border-0 bg-white"
+          loading="lazy"
+        />
+      )}
+    </div>
+  );
+};
+
+export const CodeBlock: React.FC<CodeBlockProps> = ({ language, code }) => {
+  const normalizedLanguage = normalizeCodeLanguage(language);
+  if (PLOTLY_LANGUAGES.has(normalizedLanguage)) {
+    return <PlotlyCodeBlock language={language} code={code} />;
+  }
+  if (LIVE_HTML_LANGUAGES.has(normalizedLanguage) || LIVE_REACT_LANGUAGES.has(normalizedLanguage)) {
+    return <LivePreviewCodeBlock language={language} code={code} />;
+  }
+  return <StaticCodeBlock language={language} code={code} />;
 };
 
 // Helper function for rendering standard inline code elements

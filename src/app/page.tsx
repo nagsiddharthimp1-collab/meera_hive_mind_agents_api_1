@@ -102,6 +102,13 @@ export default function Home() {
       </div>
     );
   }
+  if (isLoadingSubscription || subscriptionData?.requires_payment_for_chat === true) {
+    return (
+      <div className="min-h-[100dvh] flex items-center justify-center bg-background">
+        <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <PricingModalProvider>

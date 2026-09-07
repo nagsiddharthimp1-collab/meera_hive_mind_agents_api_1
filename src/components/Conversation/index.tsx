@@ -74,6 +74,7 @@ type LegacyMessageRow = {
   timestamp: string;
   session_id: string | null;
   is_call: boolean | null;
+  message_type?: string | null;
 };
 
 const prependUniqueId = (ids: string[], targetId: string): string[] => {
@@ -156,6 +157,7 @@ const mapRealtimeMessageRow = (row: unknown): ChatMessageFromServer | null => {
     content: typeof source.content === 'string' ? source.content : '',
     timestamp,
     session_id: typeof source.session_id === 'string' ? source.session_id : undefined,
+    message_type: typeof source.message_type === 'string' ? source.message_type : null,
     is_call: Boolean(source.is_call),
     attachments: normalizeAttachments(source.attachments),
     failed: false,
@@ -984,7 +986,7 @@ export const Conversation: React.FC = () => {
 
         const { data, error } = await supabase
           .from('messages')
-          .select('message_id,user_id,content_type,content,timestamp,session_id,is_call')
+          .select('message_id,user_id,content_type,content,timestamp,session_id,is_call,message_type')
           .eq('user_id', legacyUserId)
           .order('timestamp', { ascending: true });
 
@@ -1000,6 +1002,7 @@ export const Conversation: React.FC = () => {
           content: row.content,
           timestamp: row.timestamp,
           session_id: row.session_id ?? undefined,
+          message_type: row.message_type ?? null,
           is_call: row.is_call ?? false,
           attachments: [],
           failed: false,
@@ -1879,17 +1882,7 @@ export const Conversation: React.FC = () => {
               </h1>
             </div>
 
-            {isImagesView ? (
-              <div className="w-9 h-9" />
-            ) : (
-              <button
-                onClick={handleOpenVoiceAssistant}
-                className="flex items-center justify-center w-9 p-2 h-9 rounded-full border-2 border-primary/20 hover:border-primary/50 transition-colors text-primary"
-                aria-label="Open voice assistant"
-              >
-                <IoCallSharp size={24} className="text-primary" />
-              </button>
-            )}
+            <div className="w-9 h-9" />
           </div>
         </header>
 

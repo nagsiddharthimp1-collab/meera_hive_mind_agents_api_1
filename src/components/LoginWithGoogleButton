@@ -1,32 +1,56 @@
 "use client";
 
-import { supabase } from "@/lib/supabaseClient";
+import { OpenInBrowserDialog } from "@/components/auth/OpenInBrowserDialog";
+import { startGoogleOAuth } from "@/lib/auth/startGoogleOAuth";
+import { useState } from "react";
 
 export function LoginWithGoogleButton() {
-  const handleLogin = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-        queryParams: {
-          prompt: "select_account",
-        },
-      },
-    });
+  const [openInBrowserState, setOpenInBrowserState] = useState<{
+    isOpen: boolean;
+    openUrl: string;
+    browserHint: "Safari" | "Chrome";
+  }>({
+    isOpen: false,
+    openUrl: "",
+    browserHint: "Safari",
+  });
 
-    if (error) {
-      console.error("Google login error:", error.message);
+  const handleLogin = async () => {
+    const result = await startGoogleOAuth();
+    if (result.status === "blocked_in_embedded_browser") {
+      setOpenInBrowserState({
+        isOpen: true,
+        openUrl: result.openUrl,
+        browserHint: result.browserHint,
+      });
+      return;
+    }
+    if (result.status === "failed") {
+      console.error("Google login error:", result.message);
       alert("Login failed, please try again.");
     }
   };
 
   return (
-    <button
-      onClick={handleLogin}
-      className="w-full rounded-xl py-3 text-sm font-medium flex items-center justify-center gap-2"
-    >
-      {/* keep your Google icon if you have one here */}
-      <span>Login with Google</span>
-    </button>
+    <>
+      <button
+        onClick={handleLogin}
+        className="w-full rounded-xl py-3 text-sm font-medium flex items-center justify-center gap-2"
+      >
+        {/* keep your Google icon if you have one here */}
+        <span>Login with Google</span>
+      </button>
+      <OpenInBrowserDialog
+        isOpen={openInBrowserState.isOpen}
+        openUrl={openInBrowserState.openUrl}
+        browserHint={openInBrowserState.browserHint}
+        onClose={() =>
+          setOpenInBrowserState((prev) => ({
+            ...prev,
+            isOpen: false,
+          }))
+        }
+      />
+    </>
   );
 }

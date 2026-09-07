@@ -47,7 +47,7 @@ export interface CreatePaymentResponse {
   message: string;
   data: {
     order_id: string;
-    payment_session_id: string;
+    payment_session_id: string | null;
     payment_status?: string;
   };
 }
@@ -66,6 +66,13 @@ export interface SubscriptionStatusResponse {
   tokens_left: number;
   message: string;
   plan_type?: string;
+  is_paid_active?: boolean;
+  access_type?: 'free_trial' | 'monthly' | 'lifetime';
+  requires_payment_for_chat?: boolean;
+  is_legacy_user?: boolean;
+  paywall_enabled?: boolean;
+  paywall_cutover_at?: string;
+  cache_ttl_seconds?: number;
 }
 
 export interface DeductTalktimeRequest {

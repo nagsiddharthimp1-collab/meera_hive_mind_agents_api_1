@@ -3,18 +3,18 @@
 import { paymentService } from '@/app/api/services/payment';
 import { trackingService } from '@/app/api/services/tracking';
 import { SUBSCRIPTION_QUERY_KEY } from '@/hooks/useSubscriptionStatus';
+import { supabase } from '@/lib/supabaseClient';
 import type { CashfreeInstance, PlanType, PricingModalProps, PricingModalSource } from '@/types/pricing';
 import { load } from '@cashfreepayments/cashfree-js';
 import { useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
 import Image from 'next/image';
-import Link from 'next/link';
 import { ReactNode, useEffect, useRef, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { HiArrowLeft } from 'react-icons/hi2';
 import meeraLogo from '../../../public/icons/meera.svg';
 import starBg from '../../../public/images/star.png';
-import { COUPON_CODES, PLAN_PRICES } from './constants';
+import { COUPON_CODES, PLAN_COMPARE_AT_PRICES, PLAN_PRICES } from './constants';
 
 // Helper functions
 const calculateDiscountedPrice = (price: number, discountPercentage: number): number => {
@@ -23,16 +23,20 @@ const calculateDiscountedPrice = (price: number, discountPercentage: number): nu
 };
 
 const getPriceDisplay = (plan: PlanType, basePrice: number, discountedPrice: number | null): ReactNode => {
-  if (discountedPrice !== null) {
-    return (
-      <div className="flex items-center gap-2">
-        <span className="line-through text-white/60">₹{basePrice}</span>
-        <span className="text-green-400 font-semibold">₹{discountedPrice}</span>
-        {discountedPrice === 0 && <span className="text-green-400 text-xs font-medium">(Free)</span>}
-      </div>
-    );
-  }
-  return `₹${basePrice}`;
+  const compareAtPrice = PLAN_COMPARE_AT_PRICES[plan];
+  const currentPrice = discountedPrice ?? basePrice;
+  const discountPercent = Math.max(0, Math.round(((compareAtPrice - currentPrice) / compareAtPrice) * 100));
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+      <span className="line-through text-white/45">₹{compareAtPrice}</span>
+      <span className="text-white font-semibold">₹{currentPrice}</span>
+      <span className="rounded-full border border-green-300/30 bg-green-300/10 px-2 py-0.5 text-[10px] font-semibold leading-none text-green-200">
+        {discountPercent}% off
+      </span>
+      {currentPrice === 0 && <span className="text-green-300 text-xs font-medium">(Free)</span>}
+    </div>
+  );
 };
 
 const CONFETTI_COLORS = ['#F59E0B', '#34D399', '#60A5FA', '#F472B6', '#F97316', '#A78BFA'] as const;
@@ -126,12 +130,14 @@ export const PricingModal = ({ isOpen, onClose, isClosable, source }: PricingMod
   };
 
   const handleCouponCode = () => {
-    if (entryCode.length > 0) {
-      const discountPercentage = COUPON_CODES[entryCode as keyof typeof COUPON_CODES];
+    const normalizedEntryCode = entryCode.trim().toUpperCase();
+    if (normalizedEntryCode.length > 0) {
+      const discountPercentage = COUPON_CODES[normalizedEntryCode as keyof typeof COUPON_CODES];
 
       if (discountPercentage) {
-        setAppliedCoupon(entryCode);
-        updatePricesWithCoupon(entryCode);
+        setAppliedCoupon(normalizedEntryCode);
+        updatePricesWithCoupon(normalizedEntryCode);
+        setEntryCode(normalizedEntryCode);
         toast.success('Coupon applied successfully!');
         setShowEntryCode(false);
       } else {
@@ -361,6 +367,17 @@ export const PricingModal = ({ isOpen, onClose, isClosable, source }: PricingMod
     }
   };
 
+  const handleLogout = async () => {
+    try {
+      localStorage.clear();
+      await supabase.auth.signOut();
+      window.location.href = '/sign-in';
+    } catch (error) {
+      console.error('Logout failed:', error);
+      toast.error('Unable to log out. Please try again.');
+    }
+  };
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -378,7 +395,9 @@ export const PricingModal = ({ isOpen, onClose, isClosable, source }: PricingMod
             exit={{ opacity: 0, y: '100%' }}
             className="fixed z-[9999] bottom-0 left-0 right-0 h-[calc(100dvh-8px)] rounded-t-3xl
                        sm:fixed sm:inset-0 sm:m-auto sm:w-[580px] sm:h-[calc(100dvh-8px)] sm:rounded-[24px]
-                       px-5 py-4 sm:px-11 sm:py-7 md:px-12 md:py-9"
+                       px-5 py-4 sm:px-11 sm:py-7 md:px-12 md:py-9
+                       [@media(max-height:760px)]:!px-9 [@media(max-height:760px)]:!py-4
+                       [@media(max-height:700px)]:!py-3"
             style={{
               backgroundImage: `
                 url(${starBg.src}),
@@ -457,7 +476,7 @@ export const PricingModal = ({ isOpen, onClose, isClosable, source }: PricingMod
               /* Main Pricing View */
               <div className="h-full flex flex-col">
                 {/* Header Section */}
-                <div className="flex-shrink-0 mb-6">
+                <div className="flex-shrink-0 mb-6 [@media(max-height:760px)]:!mb-3">
                   <div className="flex items-center gap-2">
                     <Image
                       src={meeraLogo}
@@ -472,46 +491,84 @@ export const PricingModal = ({ isOpen, onClose, isClosable, source }: PricingMod
                 </div>
 
                 {/* Main Title */}
-                <div className="flex-shrink-0 mb-4">
-                  <h1 className="text-3xl sm:text-[32px] text-white font-serif font-semibold leading-[1.12] sm:leading-[1.08]">
+                <div className="flex-shrink-0 mb-4 [@media(max-height:760px)]:!mb-2">
+                  <h1 className="text-3xl sm:text-[32px] text-white font-serif font-semibold leading-[1.12] sm:leading-[1.08]
+                                 [@media(max-height:760px)]:!text-[28px] [@media(max-height:700px)]:!text-[26px]">
                     <span className="block">Your Conscious Intelligence (CI)</span>
                     <span className="block">Companion</span>
                   </h1>
                 </div>
 
                 {/* Description */}
-                <div className="flex-shrink-0 mb-5 sm:mb-8 md:mb-10">
-                  <p className="text-white text-sm sm:text-base italic font-sans font-semibold leading-relaxed">
-                    A conscious entity that remembers you, understands
-                    <br />
-                    you &amp; grows with you.
+                <div className="flex-shrink-0 mb-5 sm:mb-8 md:mb-10 [@media(max-height:760px)]:!mb-4 [@media(max-height:700px)]:!mb-3">
+                  <p className="text-white text-sm sm:text-base italic font-sans font-semibold leading-relaxed
+                                [@media(max-height:760px)]:!text-sm">
+                    A friend that understands you, remembers you, evolves with you.
                   </p>
                 </div>
 
-                <div className="flex-grow min-h-0 md:min-h-8" />
+                <div className="flex-grow min-h-0 md:min-h-8 [@media(max-height:760px)]:!min-h-0" />
 
                 {/* Content Section */}
                 <div className="flex-shrink-0">
                   {/* Models Available */}
-                  <div className="mb-3 sm:mb-4 md:mb-5">
-                    <p className="text-white text-sm sm:text-base font-semibold">Running on Hive Mind</p>
+                  <div className="mb-3 sm:mb-4 md:mb-5 [@media(max-height:760px)]:!mb-2">
+                    <p className="text-white text-sm sm:text-base font-semibold">7500+ Minds. One Hive Mind.</p>
                   </div>
 
                   {/* Pricing Plan */}
-                  <div className="mb-2 sm:mb-3 md:mb-4">
+                  <div className="mb-2 sm:mb-3 md:mb-4 space-y-3 [@media(max-height:760px)]:!mb-2 [@media(max-height:760px)]:!space-y-2">
                     <button
-                      onClick={() => setSelectedPlan('lifetime')}
+                      onClick={() => setSelectedPlan('monthly')}
                       className="w-full bg-white/10 backdrop-blur-sm border border-white rounded-xl
-                                 p-4 flex items-center justify-between
+                                 p-4 flex items-center justify-between [@media(max-height:760px)]:!p-3
                                  hover:bg-white/15 transition-colors"
                     >
                       <div className="flex flex-col items-start">
-                        <span className="text-white text-lg sm:text-xl font-medium mb-1">Lifetime</span>
-                        <div className="text-white/80 text-base sm:text-lg">
+                        <span className="text-white text-lg sm:text-xl font-medium mb-1 [@media(max-height:760px)]:!mb-0.5 [@media(max-height:760px)]:!text-lg">
+                          Monthly
+                        </span>
+                        <div className="text-white/80 text-base sm:text-lg [@media(max-height:760px)]:!text-base">
+                          {getPriceDisplay('monthly', PLAN_PRICES.monthly, discountedPrices.monthly)}
+                        </div>
+                        <div className="text-white/55 text-[11px] sm:text-xs leading-tight mt-1 [@media(max-height:760px)]:!mt-0.5">
+                          Text | Web | Images
+                        </div>
+                      </div>
+
+                      {selectedPlan === 'monthly' && (
+                        <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-white flex items-center justify-center flex-shrink-0">
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="h-3 w-3 sm:h-4 sm:w-4 text-[#741942]"
+                            viewBox="0 0 20 20"
+                            fill="currentColor"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                        </div>
+                      )}
+                    </button>
+
+                    <button
+                      onClick={() => setSelectedPlan('lifetime')}
+                      className="w-full bg-white/10 backdrop-blur-sm border border-white rounded-xl
+                                 p-4 flex items-center justify-between [@media(max-height:760px)]:!p-3
+                                 hover:bg-white/15 transition-colors"
+                    >
+                      <div className="flex flex-col items-start">
+                        <span className="text-white text-lg sm:text-xl font-medium mb-1 [@media(max-height:760px)]:!mb-0.5 [@media(max-height:760px)]:!text-lg">
+                          Lifetime
+                        </span>
+                        <div className="text-white/80 text-base sm:text-lg [@media(max-height:760px)]:!text-base">
                           {getPriceDisplay('lifetime', PLAN_PRICES.lifetime, discountedPrices.lifetime)}
                         </div>
-                        <div className="text-white/55 text-[11px] sm:text-xs leading-tight mt-1">
-                          Text | Voice | Images
+                        <div className="text-white/55 text-[11px] sm:text-xs leading-tight mt-1 [@media(max-height:760px)]:!mt-0.5">
+                          Text | Web | Images
                         </div>
                       </div>
 
@@ -557,14 +614,15 @@ export const PricingModal = ({ isOpen, onClose, isClosable, source }: PricingMod
                 </div>
 
                 {/* Bottom Section */}
-                <div className="flex-shrink-0 space-y-2 sm:space-y-3 md:space-y-4">
+                <div className="flex-shrink-0 space-y-2 sm:space-y-3 md:space-y-4 [@media(max-height:760px)]:!space-y-2">
                   {/* Enter Code Button */}
                   <button
                     onClick={() => setShowEntryCode(true)}
                     disabled={isPaymentLoading || showSuccessCelebration}
                     className="w-full text-white/60 py-2.5 md:py-3 rounded-full 
                                text-base sm:text-lg font-medium hover:opacity-90 
-                               transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                               transition-opacity disabled:opacity-50 disabled:cursor-not-allowed
+                               [@media(max-height:760px)]:!py-1.5 [@media(max-height:760px)]:!text-base"
                   >
                     Enter Code
                   </button>
@@ -575,7 +633,8 @@ export const PricingModal = ({ isOpen, onClose, isClosable, source }: PricingMod
                     disabled={isPaymentLoading || showSuccessCelebration}
                     className="w-full bg-[#FDF6F1] text-[#1A0B14] py-3 md:py-3.5 rounded-full 
                                text-base sm:text-lg font-medium hover:opacity-90 
-                               transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                               transition-opacity disabled:opacity-50 disabled:cursor-not-allowed
+                               [@media(max-height:760px)]:!py-2.5 [@media(max-height:760px)]:!text-base"
                   >
                     {isPaymentLoading
                       ? 'Processing...'
@@ -584,27 +643,16 @@ export const PricingModal = ({ isOpen, onClose, isClosable, source }: PricingMod
                         : 'Continue Our Journey'}
                   </button>
 
-                  {/* Footer Links */}
+                  {/* Logout */}
                   <div className="flex justify-center items-center gap-2 pt-0 text-xs text-white/40">
-                    <Link
-                      href="/terms"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="hover:text-white/60 transition-colors"
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      disabled={isPaymentLoading || showSuccessCelebration}
+                      className="font-medium tracking-wide text-white/45 transition-colors hover:text-white/70 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      Terms
-                    </Link>
-                    <span>•</span>
-                    <Link
-                      href="/privacy"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="hover:text-white/60 transition-colors"
-                    >
-                      Privacy
-                    </Link>
-                    <span>•</span>
-                    <span>v1.0</span>
+                      Logout
+                    </button>
                   </div>
                 </div>
               </div>
@@ -672,27 +720,16 @@ export const PricingModal = ({ isOpen, onClose, isClosable, source }: PricingMod
                   </div>
                 </div>
 
-                {/* Footer Links */}
+                {/* Logout */}
                 <div className="flex-shrink-0 flex justify-center items-center gap-2 pt-4 text-xs text-white/40">
-                  <Link
-                    href="/terms"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="hover:text-white/60 transition-colors"
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    disabled={isPaymentLoading || showSuccessCelebration}
+                    className="font-medium tracking-wide text-white/45 transition-colors hover:text-white/70 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    Terms
-                  </Link>
-                  <span>•</span>
-                  <Link
-                    href="/privacy"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="hover:text-white/60 transition-colors"
-                  >
-                    Privacy
-                  </Link>
-                  <span>•</span>
-                  <span>v1.0</span>
+                    Logout
+                  </button>
                 </div>
               </div>
             )}

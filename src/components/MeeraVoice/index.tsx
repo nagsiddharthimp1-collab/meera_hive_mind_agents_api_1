@@ -28,7 +28,6 @@ interface MeeraVoiceProps {
 }
 
 const THIRTY_SECONDS = 30;
-const ENABLE_BROWSER_LIVE_API = process.env.NEXT_PUBLIC_ENABLE_BROWSER_LIVE_API === 'true';
 
 export const MeeraVoice = ({ className, onClose, isOpen = true }: MeeraVoiceProps) => {
   const { data: sessionData, status: sessionAuthStatus } = useSession();
@@ -54,6 +53,8 @@ export const MeeraVoice = ({ className, onClose, isOpen = true }: MeeraVoiceProp
   const autoStartTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const callDurationIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const wakeLockActiveRef = useRef(false);
+  const isStartAttemptInProgressRef = useRef(false);
+  const lastStartAttemptErrorRef = useRef<string | null>(null);
 
   const { showToast } = useToast();
   const { isSupported, request, release } = useWakeLock();
@@ -74,7 +75,12 @@ export const MeeraVoice = ({ className, onClose, isOpen = true }: MeeraVoiceProp
 
   useEffect(() => {
     const onError = (e: ErrorEvent) => {
-      setError(e.message || 'An unknown connection error occurred.');
+      const message = e.message?.trim() || 'Unable to connect to voice model. Please try again in a moment.';
+      if (isStartAttemptInProgressRef.current) {
+        lastStartAttemptErrorRef.current = message;
+        return;
+      }
+      setError(message);
     };
     client.on('error', onError);
     return () => {
@@ -275,21 +281,129 @@ export const MeeraVoice = ({ className, onClose, isOpen = true }: MeeraVoiceProp
       return;
     }
 
-    if (!ENABLE_BROWSER_LIVE_API) {
-      showToast('Voice is disabled in this deployment for security hardening.', {
+    if (!subscriptionData) {
+      const subscriptionErrorMessage =
+        typeof subscriptionError === 'object' &&
+        subscriptionError !== null &&
+        'message' in subscriptionError &&
+        typeof subscriptionError.message === 'string'
+          ? subscriptionError.message
+          : null;
+      console.warn('[MeeraVoice] Subscription verification unavailable. Continuing with fallback.', {
+        subscriptionErrorMessage,
+      });
+    }
+
+    if (!process.env.NEXT_PUBLIC_BACKEND_URL) {
+      showToast('Voice relay is not configured. Missing NEXT_PUBLIC_BACKEND_URL.', {
         type: 'error',
         position: 'meera-voice',
       });
       return;
     }
 
-    showToast('Browser voice key path is disabled. Enable a secure server relay before turning voice on.', {
-      type: 'error',
-      position: 'meera-voice',
-    });
-    return;
+    try {
+      setIsConnecting(true);
+      isConnectingRef.current = true;
+      isStartAttemptInProgressRef.current = true;
+      lastStartAttemptErrorRef.current = null;
+      setCallEndedDueToTalktime(false);
+      pricingModalShownRef.current = false;
+
+      if (subscriptionData) {
+        const isPaidUser = subscriptionData.plan_type !== 'free_trial';
+        const isSubscriptionActive = isPaidUser
+          ? isPaidPlanActive(subscriptionData)
+          : isFreeTrialWindowActive(subscriptionData);
+        const talkTimeAvailable = currentTotalTalkTime > 0;
+
+        const isCallPossible = isPaidUser ? isSubscriptionActive : talkTimeAvailable && isSubscriptionActive;
+
+        if (!isCallPossible) {
+          if (isPaidUser && !isSubscriptionActive) {
+            openModal('plan_expired_still_calling', true);
+          } else if (!isPaidUser) {
+            openModal('plan_expired_still_calling', false);
+          }
+          setIsConnecting(false);
+          isConnectingRef.current = false;
+          isStartAttemptInProgressRef.current = false;
+          return;
+        }
+      }
+
+      if (!componentMountedRef.current) return;
+
+      const { model_name, model_fallbacks, temperature, max_tokens, system_prompt, google_search } =
+        MEERA_VOICE_CONFIG;
+
+      const tools: Tool[] = [];
+      if (google_search) {
+        tools.push({ googleSearch: {} });
+      }
+      const config: LiveConnectConfig = {
+        responseModalities: [Modality.AUDIO],
+        temperature: temperature,
+        maxOutputTokens: max_tokens,
+        speechConfig: {
+          voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Aoede' } },
+        },
+        systemInstruction: {
+          parts: [
+            {
+              text: system_prompt,
+            },
+          ],
+        },
+        tools: tools,
+        inputAudioTranscription: {},
+        outputAudioTranscription: {},
+      };
+
+      const modelsToTry = Array.from(new Set([
+        model_name,
+        ...(model_fallbacks || []),
+      ]));
+
+      let didConnect = false;
+      for (const modelCandidate of modelsToTry) {
+        didConnect = await connect(modelCandidate, config);
+        if (didConnect) {
+          break;
+        }
+      }
+
+      if (!didConnect) {
+        throw new Error(lastStartAttemptErrorRef.current || 'Unable to connect to voice model. Please try again in a moment.');
+      }
+
+      await start({ audio: { mic: true, system: false }, video: false });
+      isStartAttemptInProgressRef.current = false;
+      lastStartAttemptErrorRef.current = null;
+    } catch (err) {
+      console.error('Caught error in handleStartCall:', err);
+      isStartAttemptInProgressRef.current = false;
+
+      if (componentMountedRef.current) {
+        const errorMessage = (err as { message?: string })?.message || 'Failed to start call. Please try again.';
+        showToast(errorMessage, {
+          type: 'error',
+          position: 'meera-voice',
+        });
+        setIsConnecting(false);
+        isConnectingRef.current = false;
+        await endCall();
+      }
+    }
   }, [
+    connect,
+    start,
+    openModal,
     showToast,
+    subscriptionData,
+    subscriptionError,
+    currentTotalTalkTime,
+    endCall,
   ]);
 
   // Enhanced auto-start logic with better race condition handling
@@ -314,7 +428,6 @@ export const MeeraVoice = ({ className, onClose, isOpen = true }: MeeraVoiceProp
         (navigator as Navigator & { standalone?: boolean }).standalone === true);
 
     const shouldAttemptAutoStart =
-      ENABLE_BROWSER_LIVE_API &&
       isOpen &&
       !autoCallInitiatedRef.current &&
       !isInitializing &&

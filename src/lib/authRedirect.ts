@@ -209,6 +209,14 @@ export const resolveHomeRouteDecision = ({
   }
 
   if (sessionStatus === 'authenticated') {
+    if (isSubscriptionLoading) {
+      return { target: null, reason: null };
+    }
+
+    if (subscriptionData?.requires_payment_for_chat === true) {
+      return { target: '/payment', reason: 'authenticated_payment_required' };
+    }
+
     return { target: null, reason: null };
   }
 
@@ -224,6 +232,34 @@ export const resolveHomeRouteDecision = ({
   }
 
   return { target: '/sign-in', reason: 'unauthenticated_user' };
+};
+
+export const resolvePaymentRouteDecision = ({
+  sessionStatus,
+  isSubscriptionLoading,
+  subscriptionData,
+}: {
+  sessionStatus: SessionStatus;
+  isSubscriptionLoading: boolean;
+  subscriptionData?: SubscriptionData | null;
+}): RedirectDecision => {
+  if (sessionStatus === 'loading') {
+    return { target: null, reason: null };
+  }
+
+  if (sessionStatus === 'unauthenticated') {
+    return { target: '/sign-in', reason: 'payment_route_unauthenticated' };
+  }
+
+  if (isSubscriptionLoading) {
+    return { target: null, reason: null };
+  }
+
+  if (subscriptionData?.requires_payment_for_chat === true) {
+    return { target: null, reason: 'payment_required' };
+  }
+
+  return { target: '/', reason: 'payment_not_required' };
 };
 
 export const resolveSignInRouteDecision = (sessionStatus: SessionStatus): RedirectDecision => {

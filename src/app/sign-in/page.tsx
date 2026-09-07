@@ -1,6 +1,7 @@
 'use client';
 
 import { SuccessDialog } from '@/components/SuccessDialog';
+import { OpenInBrowserDialog } from '@/components/auth/OpenInBrowserDialog';
 import { H1, Italic } from '@/components/ui/Typography';
 import {
   breakAuthRedirectLoop,
@@ -18,6 +19,7 @@ import {
   type SessionStatus,
 } from '@/lib/authRedirect';
 import { supabase } from '@/lib/supabaseClient';
+import { startGoogleOAuth } from '@/lib/auth/startGoogleOAuth';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -65,6 +67,15 @@ function SignInClient() {
   const referralId = searchParams.get('referral_id');
   const router = useRouter();
   const [sessionStatus, setSessionStatus] = useState<SessionStatus>('loading');
+  const [openInBrowserState, setOpenInBrowserState] = useState<{
+    isOpen: boolean;
+    openUrl: string;
+    browserHint: 'Safari' | 'Chrome';
+  }>({
+    isOpen: false,
+    openUrl: '',
+    browserHint: 'Safari',
+  });
 
   useEffect(() => {
     let mounted = true;
@@ -132,15 +143,16 @@ function SignInClient() {
         document.cookie = `${GUEST_TOKEN_COOKIE_KEY}=${guestToken}; path=/; max-age=3600; SameSite=Lax`;
       }
 
-      await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-          queryParams: {
-            prompt: 'select_account',
-          },
-        },
-      });
+      const result = await startGoogleOAuth();
+      if (result.status === 'blocked_in_embedded_browser') {
+        setOpenInBrowserState({
+          isOpen: true,
+          openUrl: result.openUrl,
+          browserHint: result.browserHint,
+        });
+      } else if (result.status === 'failed') {
+        console.error('Error signing in with Google:', result.message);
+      }
     } catch (error) {
       console.error('Error signing in with Google:', error);
     }
@@ -180,16 +192,13 @@ function SignInClient() {
               width={400}
               height={400}
               priority
-              className="w-auto h-auto max-w-[350px] md:max-w-[400px] max-h-[50vh] md:max-h-[55vh] object-contain"
+              className="w-full h-auto max-w-[388px] md:max-w-[445px] max-h-[55vh] md:max-h-[63vh] object-contain translate-x-[5px]"
             />
           </div>
 
           <div className="mt-auto space-y-3 mb-1">
             <div className="text-center">
-<H1 className="text-2xl md:text-3xl text-center">
-  World&apos;s first<br />
-  Conscious Intelligence (CI)
-</H1>
+<H1 className="text-2xl md:text-3xl text-center">Your Conscious Intelligence (CI) Companion</H1>
             </div>
 
             <button
@@ -208,6 +217,9 @@ function SignInClient() {
             </button>
 
             <div className="flex justify-center gap-4 mt-3">
+              <Link href="/whitepaper" className="text-xs font-[500] text-primary hover:underline">
+                Whitepaper
+              </Link>
               <Link href="/terms" className="text-xs font-[500] text-primary hover:underline">
                 Terms
               </Link>
@@ -218,6 +230,17 @@ function SignInClient() {
           </div>
         </div>
       </div>
+      <OpenInBrowserDialog
+        isOpen={openInBrowserState.isOpen}
+        openUrl={openInBrowserState.openUrl}
+        browserHint={openInBrowserState.browserHint}
+        onClose={() =>
+          setOpenInBrowserState((prev) => ({
+            ...prev,
+            isOpen: false,
+          }))
+        }
+      />
       <SearchParamsHandler enabled={sessionStatus === 'unauthenticated'} />
     </main>
   );

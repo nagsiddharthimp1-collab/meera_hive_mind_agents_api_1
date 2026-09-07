@@ -41,6 +41,7 @@ export interface PaymentRequest {
 }
 
 export type PricingModalSource =
+  | 'paywall_route' // User is routed to payment-first gate
   | 'upgrade_button' // User clicked upgrade button in profile
   | 'free_tokens_expired' // Free trial user's tokens expired
   | 'free_talktime_expired' // Free trial user's talk time expired

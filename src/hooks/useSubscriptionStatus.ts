@@ -67,6 +67,13 @@ export const useSubscriptionStatus = () => {
           tokens_left: response.tokens_left,
           message: response.message,
           plan_type: response.plan_type,
+          is_paid_active: response.is_paid_active,
+          access_type: response.access_type,
+          requires_payment_for_chat: response.requires_payment_for_chat,
+          is_legacy_user: response.is_legacy_user,
+          paywall_enabled: response.paywall_enabled,
+          paywall_cutover_at: response.paywall_cutover_at,
+          cache_ttl_seconds: response.cache_ttl_seconds,
         };
       } catch (error) {
         console.error('Failed to fetch subscription status:', error);

@@ -113,6 +113,8 @@ type MeeraImageResponse = {
   sessionId?: string;
   webSearchEnabled?: boolean;
   webSearchTriggerReason?: string;
+  messageType?: string;
+  conversationClass?: string;
   reply?: string;
   thoughts?: string;
   images?: { mimeType?: string; data: string; dataUrl?: string }[];
@@ -122,9 +124,20 @@ type MeeraImageResponse = {
 
 /* ---------- Constants ---------- */
 const CONTEXT_WINDOW = 40;
-const CLIENT_SESSION_NAMESPACE = (process.env.NEXT_PUBLIC_SESSION_NAMESPACE || 'r20260329f1').trim();
+const CONTEXT_RESET_TRIGGER_MESSAGES = 40;
+const CONTEXT_RESET_TAIL_MESSAGES = 6;
+const CLIENT_SESSION_NAMESPACE = (process.env.NEXT_PUBLIC_SESSION_NAMESPACE || 'r20260331f1').trim();
 const CLIENT_SESSION_PREFIX = `sess_${CLIENT_SESSION_NAMESPACE}_`;
 const CLIENT_SESSION_STORAGE_KEY_PREFIX = `meera:chat_session_id:${CLIENT_SESSION_NAMESPACE}:`;
+const FINAL_OVERLOAD_FALLBACK_TEXT = 'Too many people are using Meera right now. Please try again later.';
+const INTERNAL_EMPTY_REPLY_PLACEHOLDER_TEXT = 'Sorry, I could not generate a reply.';
+
+function isForbiddenAssistantReply(value: string | null | undefined): boolean {
+  const text = String(value || '').trim();
+  if (!text) return true;
+  if (text === INTERNAL_EMPTY_REPLY_PLACEHOLDER_TEXT) return true;
+  return false;
+}
 
 /* ---------- Env Vars ---------- */
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -248,13 +261,42 @@ function isLikelyAttachmentEditCue(text: string): boolean {
   const hasStyleCue =
     /\b(look|style|vibe|theme|aesthetic|avatar|character|costume|outfit|filter)\b/.test(t);
   const hasSubjectRef = /\b(him|her|them|me|my|our|it|this|that|face)\b/.test(t);
-  return hasTransformVerb && (hasImageRef || hasStyleCue || hasSubjectRef || t.length <= 180);
+  return hasTransformVerb && (hasImageRef || hasStyleCue || hasSubjectRef);
 }
 
 function isLikelyAttachmentReadCue(text: string): boolean {
   const t = text.toLowerCase();
   return /\b(read|describe|analy[sz]e|analy[sz]ing|explain|identify|ocr|transcribe|extract|summari[sz]e|caption|what(?:'s| is) in)\b/.test(
     t,
+  );
+}
+
+function isLikelyAttachmentTextRewriteCue(text: string): boolean {
+  const t = text.toLowerCase();
+  const hasTextArtifact =
+    /\b(reply|response|message|email|mail|dm|inmail|linkedin|outreach|copy|caption|headline|bio|profile|note|draft|line|paragraph|sentence)\b/.test(
+      t,
+    );
+  const hasRewriteCue =
+    /\b(rewrite|rephrase|revise|polish|tighten|shorten|draft|write|compose|fix|edit|improve|clean)\b/.test(
+      t,
+    ) ||
+    /\b(crisp|crisper|concise|shorter|clearer|cleaner|better|professional|punchier)\b/.test(
+      t,
+    ) ||
+    /\b(make|make it|make this)\b.*\b(crisp|crisper|concise|shorter|clearer|cleaner|better|professional|punchier)\b/.test(
+      t,
+    );
+  return hasTextArtifact && hasRewriteCue;
+}
+
+function isLikelyAttachmentAdviceCue(text: string): boolean {
+  const t = text.toLowerCase();
+  return (
+    /\b(tell me what to do|what should i|what can i|how can i|how do i|how should i)\b/.test(t) ||
+    /\b(suggest|recommend|advise|advice|feedback|critique|review)\b/.test(t) ||
+    /\b(what|how)\b.*\b(change|improve|fix|clean|polish|adjust|tweak|make better)\b/.test(t) ||
+    /\b(make|making)\b.*\b(clean|cleaner|better|polished|professional)\b.*\b(suggest|recommend|advice|what to do)\b/.test(t)
   );
 }
 
@@ -280,6 +322,44 @@ function normalizeOutgoingAttachments(attachments: OutgoingAttachment[]): Outgoi
 function base64ToBlobUrl(base64: string, mimeType: string): string {
   const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
   return URL.createObjectURL(new Blob([bytes], { type: mimeType }));
+}
+
+function imageAttachmentNameForMime(index: number, mimeType: string): string {
+  if (mimeType.includes('jpeg') || mimeType.includes('jpg')) return `generated-${index + 1}.jpg`;
+  if (mimeType.includes('webp')) return `generated-${index + 1}.webp`;
+  if (mimeType.includes('gif')) return `generated-${index + 1}.gif`;
+  return `generated-${index + 1}.png`;
+}
+
+function buildImageAttachmentsFromResponse(
+  response: Pick<MeeraImageResponse, 'attachments' | 'images'>,
+): ImageAttachment[] {
+  if (response.attachments && response.attachments.length > 0) {
+    return response.attachments;
+  }
+
+  const out: ImageAttachment[] = [];
+  (response.images ?? []).forEach((img, index) => {
+    if (!img?.data && !img?.dataUrl) return;
+    const mime = img.mimeType || 'image/png';
+    const url = img.dataUrl || base64ToBlobUrl(img.data, mime);
+    out.push({
+      type: 'image',
+      url,
+      name: imageAttachmentNameForMime(index, mime),
+    });
+  });
+
+  return out;
+}
+
+function hasAssistantImageMessage(rows: DbMessageRow[]): boolean {
+  return rows.some((row) => {
+    if (row.content_type !== 'assistant') return false;
+    if (row.message_type === 'image') return true;
+    if (row.image_url) return true;
+    return hasImageAttachment((row.attachments ?? []) as OutgoingAttachment[]);
+  });
 }
 
 function generateSummary(text: string): string {
@@ -375,6 +455,42 @@ export const chatService = {
     }
   },
 
+  async getMessageById(messageId: string) {
+    try {
+      const normalizedId = messageId.trim();
+      if (!normalizedId) return { message: 'error', data: null };
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.user) return { message: 'unauthorized', data: null };
+      const userId = session.user.id;
+
+      const { data, error } = await supabase
+        .from('messages')
+        .select(
+          'message_id, user_id, content_type, content, timestamp, session_id, is_call, model, message_type, image_url, attachments',
+        )
+        .eq('user_id', userId)
+        .eq('message_id', normalizedId)
+        .maybeSingle();
+
+      if (error) {
+        console.error('getMessageById error', error);
+        return { message: 'error', data: null };
+      }
+
+      return {
+        message: 'ok',
+        data: data ? mapDbRowToChatMessage(data as DbMessageRow) : null,
+      };
+    } catch (e) {
+      console.error('getMessageById outer error', e);
+      return { message: 'error', data: null };
+    }
+  },
+
   async getImageHistory(page: number = 1, pageSize: number = 40) {
     const from = (page - 1) * pageSize;
     const to = from + pageSize - 1;
@@ -389,10 +505,10 @@ export const chatService = {
 
       const { data, error } = await supabase
         .from('messages')
-        .select('message_id, content_type, content, timestamp, session_id, is_call, message_type, attachments')
+        .select('message_id, content_type, content, timestamp, session_id, is_call, message_type, attachments, image_url')
         .eq('user_id', userId)
         .eq('content_type', 'assistant')
-        .eq('message_type', 'image')
+        .or('image_url.not.is.null,attachments.not.is.null')
         .order('timestamp', { ascending: false })
         .range(from, to);
 
@@ -409,7 +525,18 @@ export const chatService = {
         timestamp: row.timestamp,
         session_id: row.session_id || undefined,
         is_call: row.is_call ?? false,
-        attachments: (row.attachments as ImageAttachment[] | null) ?? [],
+        attachments:
+          (row.attachments as ImageAttachment[] | null) ??
+          (row.image_url
+            ? [
+                {
+                  type: 'image' as const,
+                  url: row.image_url,
+                  name: 'generated-image.png',
+                },
+              ]
+            : []),
+        image_url: row.image_url ?? undefined,
         failed: false,
         finish_reason: null,
       }));
@@ -694,6 +821,7 @@ export const chatService = {
     onDelta,
     onDone,
     onError,
+    onMeta,
     signal,
   }: {
     message: string;
@@ -702,6 +830,13 @@ export const chatService = {
     onDelta: (delta: string) => void;
     onDone?: (finalMsg: AssistantMsg) => void;
     onError?: (err: unknown) => void;
+    onMeta?: (meta: {
+      messageType?: string;
+      conversationClass?: string;
+      model?: string;
+      webSearchEnabled?: boolean;
+      webSearchTriggerReason?: string;
+    }) => void;
     signal?: AbortSignal;
   }) {
     try {
@@ -724,7 +859,7 @@ export const chatService = {
       try {
         const { data: page1 } = await supabase
           .from('messages')
-          .select('content_type, content, timestamp, session_id')
+          .select('content_type, content, timestamp, session_id, message_type, image_url, attachments')
           .eq('user_id', userId)
           .eq('session_id', effectiveSessionId)
           .order('timestamp', { ascending: false })
@@ -738,7 +873,7 @@ export const chatService = {
       const sortedHistory = historyRows.slice().reverse();
       const normalizedAttachments = normalizeOutgoingAttachments(attachments);
 
-      const historyForModel: LLMHistoryMessage[] = sortedHistory
+      let historyForModel: LLMHistoryMessage[] = sortedHistory
         .filter((r) => r.content?.trim())
         .map((r) => ({
           role: r.content_type === 'assistant' ? 'assistant' : 'user',
@@ -746,17 +881,34 @@ export const chatService = {
         }));
 
       historyForModel.push({ role: 'user', content: message });
+      if (historyForModel.length >= CONTEXT_RESET_TRIGGER_MESSAGES) {
+        historyForModel = historyForModel.slice(-CONTEXT_RESET_TAIL_MESSAGES);
+      }
 
       const hasIncomingImageAttachment = hasImageAttachment(normalizedAttachments);
       const hasLikelyImageGenerateIntent = isImagePrompt(message);
       const hasLikelyImageEditIntent = isLikelyImageEditPrompt(message);
       const hasAttachmentEditCue = isLikelyAttachmentEditCue(message);
       const hasAttachmentReadCue = isLikelyAttachmentReadCue(message);
+      const hasAttachmentTextRewriteCue =
+        hasIncomingImageAttachment && isLikelyAttachmentTextRewriteCue(message);
+      const hasAttachmentAdviceCue = isLikelyAttachmentAdviceCue(message);
+      const hasPreviousAssistantImage = hasAssistantImageMessage(sortedHistory);
+      const hasPreviousImageEditIntent =
+        hasPreviousAssistantImage &&
+        hasLikelyImageEditIntent &&
+        !hasAttachmentReadCue &&
+        !hasAttachmentTextRewriteCue &&
+        !hasAttachmentAdviceCue;
       const isImage =
-        hasLikelyImageGenerateIntent ||
+        !hasAttachmentTextRewriteCue &&
+        !hasAttachmentAdviceCue &&
+        (hasLikelyImageGenerateIntent ||
+        hasPreviousImageEditIntent ||
         (hasIncomingImageAttachment &&
           (hasLikelyImageEditIntent || hasAttachmentEditCue) &&
-          !hasAttachmentReadCue);
+          !hasAttachmentReadCue &&
+          !hasAttachmentTextRewriteCue));
 
       /* ---------- Save user message WITH message_id ---------- */
       await supabase.from('messages').insert([
@@ -821,23 +973,19 @@ export const chatService = {
             signal,
           });
 
-          if (!res.ok) throw new Error(`Image call failed: ${res.status}`);
+          if (!res.ok) {
+            const rawError = await res.text();
+            const error = new Error(rawError || `Image call failed: ${res.status}`);
+            (error as Error & { status?: number }).status = res.status;
+            throw error;
+          }
 
           const json = (await res.json()) as MeeraImageResponse;
           persistClientSessionId(userId, json.sessionId);
 
           finalText = json.reply?.trim() || 'Here is your image.';
 
-          if (json.attachments && json.attachments.length > 0) {
-            liveAttachments = json.attachments;
-          } else {
-            (json.images ?? []).forEach((img, index) => {
-              const mime = img.mimeType || 'image/png';
-              const url = base64ToBlobUrl(img.data, mime);
-              const name = `generated-${index + 1}.png`;
-              liveAttachments.push({ type: 'image', url, name });
-            });
-          }
+          liveAttachments = buildImageAttachmentsFromResponse(json);
 
           onDelta(finalText);
         } catch (err) {
@@ -885,6 +1033,7 @@ export const chatService = {
 
       let finalText = '';
       let streamError: unknown = null;
+      let streamResponseAttachments: ImageAttachment[] = [];
 
       try {
         await streamMeera({
@@ -900,12 +1049,21 @@ export const chatService = {
           assistantMessageId,
           onMeta: (meta) => {
             persistClientSessionId(userId, meta?.sessionId);
+            onMeta?.(meta);
           },
           signal,
           idleTimeoutMs: 30000,
           onAnswerDelta: (d) => {
             finalText += d;
             onDelta(d);
+          },
+          onDone: (finalMsg) => {
+            if (finalMsg?.attachments?.length || finalMsg?.images?.length) {
+              streamResponseAttachments = buildImageAttachmentsFromResponse({
+                attachments: (finalMsg.attachments ?? []) as ImageAttachment[],
+                images: finalMsg.images,
+              });
+            }
           },
         });
       } catch (err) {
@@ -936,12 +1094,28 @@ export const chatService = {
         });
 
         if (!fallbackRes.ok) {
-          throw streamError;
+          const rawError = await fallbackRes.text();
+          const fallbackError = new Error(
+            rawError || `Chat fallback failed: ${fallbackRes.status}`,
+          );
+          (fallbackError as Error & { status?: number }).status = fallbackRes.status;
+          throw fallbackError;
         }
 
         const fallbackJson = (await fallbackRes.json()) as MeeraImageResponse;
         persistClientSessionId(userId, fallbackJson.sessionId);
-        const fallbackReply = String(fallbackJson?.reply || '').trim();
+        onMeta?.({
+          messageType: fallbackJson.messageType,
+          conversationClass: fallbackJson.conversationClass,
+          model: fallbackJson.model,
+          webSearchEnabled: fallbackJson.webSearchEnabled,
+          webSearchTriggerReason: fallbackJson.webSearchTriggerReason,
+        });
+        streamResponseAttachments = buildImageAttachmentsFromResponse(fallbackJson);
+        const fallbackReplyRaw = String(fallbackJson?.reply || '').trim();
+        const fallbackReply = isForbiddenAssistantReply(fallbackReplyRaw)
+          ? FINAL_OVERLOAD_FALLBACK_TEXT
+          : fallbackReplyRaw;
 
         if (fallbackReply) {
           if (!finalText.trim()) {
@@ -988,22 +1162,27 @@ export const chatService = {
         const candidate = await readAssistantRow();
         if (!candidate) continue;
         row = candidate;
-        if (typeof candidate.content === 'string' && candidate.content.trim()) {
+        if (typeof candidate.content === 'string' && candidate.content.trim() && !isForbiddenAssistantReply(candidate.content)) {
           resolvedFinalText = candidate.content.trim();
           break;
         }
       }
 
       if (!resolvedFinalText) {
-        resolvedFinalText = 'Sorry, I could not generate a response. Please try again.';
+        resolvedFinalText = FINAL_OVERLOAD_FALLBACK_TEXT;
       }
+
+      const rowContent = typeof row?.content === 'string' ? row.content.trim() : '';
+      const finalContent =
+        rowContent && !isForbiddenAssistantReply(rowContent) ? rowContent : resolvedFinalText;
+      const rowAttachments = (row?.attachments as ImageAttachment[] | null) ?? [];
 
       const assistantMsg: AssistantMsg = {
         message_id: row?.message_id ?? assistantMessageId,
         content_type: 'assistant',
-        content: (typeof row?.content === 'string' && row.content.trim()) ? row.content : resolvedFinalText,
+        content: finalContent,
         timestamp: row?.timestamp ?? now,
-        attachments: [],
+        attachments: rowAttachments.length > 0 ? rowAttachments : streamResponseAttachments,
         is_call: false,
         failed: false,
         finish_reason: null,

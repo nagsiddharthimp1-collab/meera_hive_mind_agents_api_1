@@ -14,7 +14,7 @@ import { api } from '../client';
 import { API_ENDPOINTS } from '../config';
 
 const PLAN_AMOUNT_MAP: Record<CreatePaymentRequest['plan_type'], number> = {
-  monthly: 1,
+  monthly: 129,
   lifetime: 499,
 };
 

@@ -28,6 +28,7 @@ import {
 } from '@/components/MessageRenderDesign/MarkdownComponents';
 import { ImageModal } from '@/components/ui/ImageModal';
 import { formatTime } from '@/lib/dateUtils';
+import { normalizeAssistantMarkdownContent } from '@/lib/markdownText';
 import { truncateFileName } from '@/lib/stringUtils';
 import { ChatMessageFromServer, GeneratedImage } from '@/types/chat';
 import Image from 'next/image';
@@ -41,6 +42,7 @@ import {
   FiDownload,
   FiPaperclip,
   FiRefreshCw,
+  FiSearch,
   FiStar,
 } from 'react-icons/fi';
 import ReactMarkdown from 'react-markdown';
@@ -48,18 +50,20 @@ import remarkGfm from 'remark-gfm';
 
 /* ---------------- Thinking status text inside the pill ---------------- */
 
-type ThinkingPhase = 'idle' | 'orchestrating' | 'searching' | 'thinking' | 'thoughts';
+type ThinkingPhase = 'idle' | 'orchestrating' | 'searching' | 'thinking' | 'thoughts' | 'generating_image';
 
 type ThinkingStatusTextProps = {
   phase: ThinkingPhase;
   thoughtText?: string;
+  isImageGeneration?: boolean;
 };
 
-const ThinkingStatusText: React.FC<ThinkingStatusTextProps> = ({ phase, thoughtText }) => {
+const ThinkingStatusText: React.FC<ThinkingStatusTextProps> = ({ phase, thoughtText, isImageGeneration = false }) => {
   const text = useMemo(() => {
     if (phase === 'orchestrating') return 'Orchestrating';
-    if (phase === 'searching') return 'Searching memories';
-    if (phase === 'thinking') return 'Thinking';
+    if (phase === 'generating_image') return 'Generating image';
+    if (phase === 'searching') return isImageGeneration ? 'Generating image' : 'Searching memories';
+    if (phase === 'thinking') return isImageGeneration ? 'Generating image' : 'Thinking';
 
     if (phase === 'thoughts' && thoughtText) {
       const firstLine =
@@ -77,7 +81,11 @@ const ThinkingStatusText: React.FC<ThinkingStatusTextProps> = ({ phase, thoughtT
     }
 
     return '';
-  }, [phase, thoughtText]);
+  }, [
+    isImageGeneration,
+    phase,
+    thoughtText,
+  ]);
 
   if (!text) return null;
 
@@ -157,6 +165,13 @@ export const RenderedMessageItem: React.FC<{
     );
 
     const hasTextContent = !!message.content || (message.content_type === 'assistant' && !!message.failed);
+    const displayContent = useMemo(
+      () =>
+        message.content_type === 'assistant'
+          ? normalizeAssistantMarkdownContent(message.content || '')
+          : message.content || '',
+      [message.content, message.content_type],
+    );
 
     const hasServerAttachments = !!message.attachments && message.attachments.length > 0;
 
@@ -166,7 +181,10 @@ export const RenderedMessageItem: React.FC<{
     const hasAttachments = hasServerAttachments || inlineGeneratedImages.length > 0;
     const hasMainContent = hasTextContent || hasAttachments;
 
-    /* Phase progression: Orchestrating -> Searching memories -> Thinking */
+    /* Phase progression:
+       - text turns: Orchestrating -> Searching memories -> Thinking
+       - image turns: Orchestrating -> Generating image
+    */
     useEffect(() => {
       if (showTypingIndicator && !isUser) {
         setPhase('orchestrating');
@@ -175,15 +193,19 @@ export const RenderedMessageItem: React.FC<{
 
         timeouts.push(
           setTimeout(() => {
-            setPhase((prev) => (prev === 'orchestrating' ? 'searching' : prev));
+            setPhase((prev) =>
+              prev === 'orchestrating' ? (message.isGeneratingImage ? 'generating_image' : 'searching') : prev,
+            );
           }, 3500),
         );
 
-        timeouts.push(
-          setTimeout(() => {
-            setPhase((prev) => (prev === 'searching' ? 'thinking' : prev));
-          }, 11000),
-        );
+        if (!message.isGeneratingImage) {
+          timeouts.push(
+            setTimeout(() => {
+              setPhase((prev) => (prev === 'searching' ? 'thinking' : prev));
+            }, 11000),
+          );
+        }
 
         return () => {
           timeouts.forEach(clearTimeout);
@@ -197,6 +219,7 @@ export const RenderedMessageItem: React.FC<{
       showTypingIndicator,
       isUser,
       thoughtText,
+      message.isGeneratingImage,
     ]);
 
     /* When model thoughts arrive, show them */
@@ -239,9 +262,9 @@ export const RenderedMessageItem: React.FC<{
     }
 
     const handleCopyToClipboard = () => {
-      if (!message.content) return;
+      if (!displayContent) return;
       navigator.clipboard
-        .writeText(message.content)
+        .writeText(displayContent)
         .then(() => {
           setIsCopied(true);
           setTimeout(() => setIsCopied(false), 2000);
@@ -261,8 +284,7 @@ export const RenderedMessageItem: React.FC<{
       if (onToggleStar) onToggleStar(message);
     };
 
-    const showThinkingRow =
-      !isUser && !message.isGeneratingImage && (showTypingIndicator || (phase === 'thoughts' && !!thoughtText));
+    const showThinkingRow = !isUser && (showTypingIndicator || (phase === 'thoughts' && !!thoughtText));
 
     const onlyThinking = showThinkingRow && !hasMainContent;
 
@@ -282,6 +304,15 @@ export const RenderedMessageItem: React.FC<{
           className={`min-w-0 flex flex-col md:pr-1 ${hasAnyImages ? 'w-[80%] md:w-[50%]' : 'max-w-[99%] md:max-w-[99%]'}`}
         >
           <div className={bubbleClasses}>
+            {isUser && message.message_type === 'deep_web_search' && (
+              <div
+                className={`mb-2 inline-flex h-6 max-w-full items-center gap-1.5 rounded-md border border-background/25 bg-background/10 px-2 text-[11px] font-medium ${textColor}`}
+                title="Researched using current web sources"
+              >
+                <FiSearch size={12} className="shrink-0" aria-hidden="true" />
+                <span className="truncate">Deep web search</span>
+              </div>
+            )}
             {/* Main content (only when there is content) */}
             {hasTextContent && (
               <>
@@ -346,7 +377,7 @@ export const RenderedMessageItem: React.FC<{
                                 node,
                               });
                             } else {
-                              const match = /language-(\w+)/.exec(className || '');
+                              const match = /language-([a-z0-9+#-]+)/i.exec(className || '');
                               const lang = match ? match[1] : '';
                               const isMultiLine = String(markdownChildren || '').includes('\n');
 
@@ -369,12 +400,12 @@ export const RenderedMessageItem: React.FC<{
                           },
                         }}
                       >
-                        {message.content}
+                        {displayContent}
                       </ReactMarkdown>
                     </div>
                   )
                 ) : (
-                  <MyCustomParagraph>{message.content}</MyCustomParagraph>
+                  <MyCustomParagraph>{displayContent}</MyCustomParagraph>
                 )}
               </>
             )}
@@ -514,15 +545,19 @@ export const RenderedMessageItem: React.FC<{
               </div>
             )}
 
-            {/* Orchestrating / searching / thinking / thoughts row */}
+            {/* Orchestrating / searching / thinking / generating image / thoughts row */}
             {showThinkingRow && (
               <div className={`${onlyThinking ? '' : 'mt-1'} flex w-full items-center justify-center`}>
-                <ThinkingStatusText phase={phase} thoughtText={thoughtText} />
+                <ThinkingStatusText
+                  phase={phase}
+                  thoughtText={thoughtText}
+                  isImageGeneration={Boolean(message.isGeneratingImage)}
+                />
               </div>
             )}
 
-            {/* Image generation skeleton */}
-            {message.isGeneratingImage && (
+            {/* Legacy image generation skeleton fallback */}
+            {message.isGeneratingImage && !showTypingIndicator && !hasMainContent && (
               <div className="mt-3">
                 <ImageSkeleton />
               </div>

@@ -642,9 +642,30 @@ export interface LiveClientEventTypes {
   usage: (usage: { promptTokenCount?: number; responseTokenCount?: number; totalTokenCount?: number }) => void;
 }
 
+type RelayTokenResponse = {
+  relay_token?: string;
+  expires_at?: string;
+  ttl_seconds?: number;
+  mode?: 'ephemeral' | 'relay';
+  error?: string;
+};
+
+type RequestedRelayToken = {
+  token: string;
+  mode: 'ephemeral' | 'relay' | 'unknown';
+};
+
+const LIVE_CONNECT_TIMEOUT_MS = (() => {
+  const raw = Number(process.env.NEXT_PUBLIC_LIVE_CONNECT_TIMEOUT_MS ?? '8000');
+  if (!Number.isFinite(raw)) return 8000;
+  return Math.min(20000, Math.max(3000, Math.round(raw)));
+})();
+
 export class GenAILiveClient extends EventEmitter<LiveClientEventTypes> {
   protected client: GoogleGenAI | null = null;
   private readonly clientOptions: LiveClientOptions;
+  private relaySocket: WebSocket | null = null;
+  private setupCompleteForCurrentConnection = false;
 
   private _status: 'connected' | 'disconnected' | 'connecting' | 'disconnecting' = 'disconnected';
   public get status() {
@@ -697,23 +718,49 @@ export class GenAILiveClient extends EventEmitter<LiveClientEventTypes> {
     this.onmessage = this.onmessage.bind(this);
   }
 
+  private async connectSessionWithTimeout(
+    model: string,
+    config: LiveConnectConfig,
+    callbacks: LiveCallbacks,
+  ): Promise<Session> {
+    const connectPromise = this.client!.live.connect({
+      model,
+      config,
+      callbacks,
+    });
+
+    let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutHandle = setTimeout(() => {
+        reject(new Error('Voice connection timed out while opening realtime socket.'));
+      }, LIVE_CONNECT_TIMEOUT_MS);
+    });
+
+    try {
+      return await Promise.race([connectPromise, timeoutPromise]);
+    } finally {
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle);
+      }
+    }
+  }
+
   async connect(model: string, config: LiveConnectConfig): Promise<boolean> {
     if (this.status === 'connected' || this.status === 'connecting') {
       return false;
     }
 
     const apiKey = typeof this.clientOptions?.apiKey === 'string' ? this.clientOptions.apiKey.trim() : '';
-    if (!apiKey) {
-      this._status = 'disconnected';
-      this.emit('error', new ErrorEvent('error', { message: 'Live voice API is disabled in this environment.' }));
-      return false;
-    }
-
     this._status = 'connecting';
+    this.setupCompleteForCurrentConnection = false;
     this.config = config;
     this._model = model;
     this._sessionId = crypto.randomUUID();
     this._isFirstTurn = true;
+
+    if (!apiKey) {
+      return this.connectViaRelay(model, config);
+    }
 
     const callbacks: LiveCallbacks = {
       onopen: this.onopen,
@@ -727,19 +774,358 @@ export class GenAILiveClient extends EventEmitter<LiveClientEventTypes> {
         this.client = new GoogleGenAI(this.clientOptions);
       }
 
-      this._session = await this.client.live.connect({
-        model,
-        config,
-        callbacks,
-      });
+      this._session = await this.connectSessionWithTimeout(model, config, callbacks);
     } catch (e) {
       const errorDetails = e instanceof Error ? { name: e.name, message: e.message, stack: e.stack } : e;
       sendErrorToSlack({ message: 'Error connecting to GenAI Live', errorResponse: errorDetails });
+      const errorMessage = e instanceof Error ? e.message : 'Unable to connect to voice model. Please try again in a moment.';
+      this.emit('error', new ErrorEvent('error', { message: errorMessage }));
       this._status = 'disconnected';
       return false;
     }
 
     this._status = 'connected';
+    const didSetup = await this.waitForSetupComplete();
+    if (!didSetup) {
+      await this.disconnect();
+      this._status = 'disconnected';
+      return false;
+    }
+    return true;
+  }
+
+  private waitForSetupComplete(timeoutMs = 12000): Promise<boolean> {
+    if (this.setupCompleteForCurrentConnection) {
+      return Promise.resolve(true);
+    }
+
+    return new Promise<boolean>((resolve) => {
+      let settled = false;
+      let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+
+      const cleanup = () => {
+        this.off('setupcomplete', onSetupComplete);
+        this.off('error', onError);
+        this.off('close', onClose);
+        if (timeoutHandle) {
+          clearTimeout(timeoutHandle);
+          timeoutHandle = null;
+        }
+      };
+
+      const finish = (value: boolean) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve(value);
+      };
+
+      const onSetupComplete = () => finish(true);
+      const onError = () => finish(false);
+      const onClose = () => finish(false);
+
+      this.on('setupcomplete', onSetupComplete);
+      this.on('error', onError);
+      this.on('close', onClose);
+
+      timeoutHandle = setTimeout(() => {
+        finish(this.setupCompleteForCurrentConnection);
+      }, timeoutMs);
+    });
+  }
+
+  private resolveRelayHttpBaseUrl(): string | null {
+    const raw = (process.env.NEXT_PUBLIC_BACKEND_URL ?? '').trim();
+    if (!raw) return null;
+
+    try {
+      const url = new URL(raw);
+      return url.toString().replace(/\/+$/, '');
+    } catch {
+      return null;
+    }
+  }
+
+  private resolveRelayWebSocketUrl(relayToken: string): string | null {
+    const httpBase = this.resolveRelayHttpBaseUrl();
+    if (!httpBase) return null;
+
+    try {
+      const url = new URL(`${httpBase}/call/live-relay`);
+      url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+      url.searchParams.set('relay_token', relayToken);
+      return url.toString();
+    } catch {
+      return null;
+    }
+  }
+
+  private async getRelayAuthBearerToken(): Promise<string | null> {
+    if (typeof window === 'undefined') return null;
+    try {
+      const { supabase } = await import('./supabaseClient');
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token?.trim();
+      return token || null;
+    } catch {
+      return null;
+    }
+  }
+
+  private buildRelaySetupMessage(model: string, config: LiveConnectConfig): Record<string, unknown> {
+    const safeConfig = (config ?? {}) as LiveConnectConfig & Record<string, unknown>;
+    const generationConfig: Record<string, unknown> = {};
+
+    if (Array.isArray(safeConfig.responseModalities)) {
+      generationConfig.responseModalities = safeConfig.responseModalities;
+    }
+    for (const key of ['temperature', 'topP', 'topK', 'maxOutputTokens', 'seed'] as const) {
+      const value = safeConfig[key];
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        generationConfig[key] = value;
+      }
+    }
+    if (safeConfig.speechConfig) {
+      generationConfig.speechConfig = safeConfig.speechConfig;
+    }
+
+    const setup: Record<string, unknown> = {
+      model,
+    };
+
+    if (Object.keys(generationConfig).length > 0) {
+      setup.generationConfig = generationConfig;
+    }
+    if (safeConfig.systemInstruction) {
+      setup.systemInstruction = safeConfig.systemInstruction;
+    }
+    if (Array.isArray(safeConfig.tools) && safeConfig.tools.length > 0) {
+      setup.tools = safeConfig.tools;
+    }
+    if (safeConfig.inputAudioTranscription) {
+      setup.inputAudioTranscription = safeConfig.inputAudioTranscription;
+    }
+    if (safeConfig.outputAudioTranscription) {
+      setup.outputAudioTranscription = safeConfig.outputAudioTranscription;
+    }
+    if (safeConfig.realtimeInputConfig) {
+      setup.realtimeInputConfig = safeConfig.realtimeInputConfig;
+    }
+
+    return { setup };
+  }
+
+  private async requestRelayToken(): Promise<RequestedRelayToken | null> {
+    const base = this.resolveRelayHttpBaseUrl();
+    if (!base) {
+      this.emit('error', new ErrorEvent('error', { message: 'Voice relay is not configured (missing NEXT_PUBLIC_BACKEND_URL).' }));
+      return null;
+    }
+
+    const bearerToken = await this.getRelayAuthBearerToken();
+    if (!bearerToken) {
+      this.emit('error', new ErrorEvent('error', { message: 'Please sign in to start voice.' }));
+      return null;
+    }
+
+    try {
+      const response = await fetch(`${base}/call/live-token`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${bearerToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
+      });
+
+      const payload = (await response.json().catch(() => null)) as RelayTokenResponse | null;
+      if (!response.ok) {
+        const errorMessage = payload?.error?.trim() || 'Failed to initialize secure voice relay.';
+        this.emit('error', new ErrorEvent('error', { message: errorMessage }));
+        return null;
+      }
+
+      const relayToken = typeof payload?.relay_token === 'string' ? payload.relay_token.trim() : '';
+      if (!relayToken) {
+        this.emit('error', new ErrorEvent('error', { message: 'Voice relay token was not returned by backend.' }));
+        return null;
+      }
+
+      const mode = payload?.mode === 'ephemeral' || payload?.mode === 'relay' ? payload.mode : 'unknown';
+      return { token: relayToken, mode };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Voice relay request failed.';
+      this.emit('error', new ErrorEvent('error', { message }));
+      return null;
+    }
+  }
+
+  private async handleRelaySocketMessage(data: string | Blob | ArrayBuffer): Promise<void> {
+    let textPayload = '';
+    try {
+      if (typeof data === 'string') {
+        textPayload = data;
+      } else if (data instanceof Blob) {
+        textPayload = await data.text();
+      } else {
+        textPayload = new TextDecoder().decode(data);
+      }
+    } catch {
+      this.onerror(new ErrorEvent('error', { message: 'Failed to decode relay response.' }));
+      return;
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(textPayload);
+    } catch {
+      this.onerror(new ErrorEvent('error', { message: 'Failed to parse relay response.' }));
+      return;
+    }
+
+    if (typeof parsed === 'object' && parsed !== null && 'error' in parsed) {
+      const relayError = (parsed as { error?: { message?: string } }).error?.message;
+      this.onerror(new ErrorEvent('error', { message: relayError || 'Voice relay error.' }));
+      return;
+    }
+
+    await this.onmessage(parsed as LiveServerMessage);
+  }
+
+  private async connectViaRelay(model: string, config: LiveConnectConfig): Promise<boolean> {
+    const requestedToken = await this.requestRelayToken();
+    if (!requestedToken) {
+      this._status = 'disconnected';
+      return false;
+    }
+
+    const relayToken = requestedToken.token;
+    const isEphemeralToken = requestedToken.mode === 'ephemeral' || relayToken.startsWith('auth_tokens/');
+    if (isEphemeralToken) {
+      this.relaySocket = null;
+      const callbacks: LiveCallbacks = {
+        onopen: this.onopen,
+        onmessage: this.onmessage,
+        onerror: this.onerror,
+        onclose: this.onclose,
+      };
+
+      try {
+        this.client = new GoogleGenAI({
+          ...this.clientOptions,
+          apiKey: relayToken,
+        });
+
+        this._session = await this.connectSessionWithTimeout(model, config, callbacks);
+      } catch (e) {
+        const errorDetails = e instanceof Error ? { name: e.name, message: e.message, stack: e.stack } : e;
+        sendErrorToSlack({ message: 'Error connecting to GenAI Live with ephemeral token', errorResponse: errorDetails });
+        const errorMessage = e instanceof Error ? e.message : 'Unable to connect to voice model. Please try again in a moment.';
+        this.emit('error', new ErrorEvent('error', { message: errorMessage }));
+        this._status = 'disconnected';
+        return false;
+      }
+
+      this._status = 'connected';
+      const didSetup = await this.waitForSetupComplete();
+      if (!didSetup) {
+        await this.disconnect();
+        this._status = 'disconnected';
+        return false;
+      }
+      return true;
+    }
+
+    const allowLegacyWebsocketRelay = process.env.NEXT_PUBLIC_ENABLE_LEGACY_VOICE_RELAY === 'true';
+    if (!allowLegacyWebsocketRelay) {
+      this._status = 'disconnected';
+      this.emit(
+        'error',
+        new ErrorEvent('error', {
+          message: 'Voice token fallback requires legacy websocket relay, which is disabled in this deployment.',
+        }),
+      );
+      return false;
+    }
+
+    const relayWsUrl = this.resolveRelayWebSocketUrl(relayToken);
+    if (!relayWsUrl) {
+      this._status = 'disconnected';
+      this.emit('error', new ErrorEvent('error', { message: 'Failed to construct voice relay websocket URL.' }));
+      return false;
+    }
+
+    const didOpen = await new Promise<boolean>((resolve) => {
+      let resolved = false;
+      let socketDidOpen = false;
+
+      const settle = (value: boolean) => {
+        if (resolved) return;
+        resolved = true;
+        resolve(value);
+      };
+
+      const relaySocket = new WebSocket(relayWsUrl);
+      this.relaySocket = relaySocket;
+
+      relaySocket.onopen = () => {
+        socketDidOpen = true;
+        this.onopen();
+        try {
+          relaySocket.send(JSON.stringify(this.buildRelaySetupMessage(model, config)));
+          settle(true);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Failed to send relay setup payload.';
+          this.onerror(new ErrorEvent('error', { message }));
+          relaySocket.close(1011, 'relay_setup_send_failed');
+          settle(false);
+        }
+      };
+
+      relaySocket.onmessage = (event) => {
+        void this.handleRelaySocketMessage(event.data);
+      };
+
+      relaySocket.onerror = () => {
+        if (!socketDidOpen) {
+          this._status = 'disconnected';
+          settle(false);
+        }
+        this.onerror(new ErrorEvent('error', { message: 'Secure voice relay websocket error.' }));
+      };
+
+      relaySocket.onclose = (event) => {
+        if (!socketDidOpen) {
+          this._status = 'disconnected';
+          settle(false);
+        }
+        this.onclose(event);
+      };
+
+      setTimeout(() => {
+        if (!socketDidOpen) {
+          try {
+            relaySocket.close(1008, 'relay_open_timeout');
+          } catch {
+            // Ignore socket close errors.
+          }
+          this._status = 'disconnected';
+          settle(false);
+        }
+      }, 10000);
+    });
+
+    if (!didOpen) {
+      return false;
+    }
+
+    const didSetup = await this.waitForSetupComplete();
+    if (!didSetup) {
+      await this.disconnect();
+      this._status = 'disconnected';
+      return false;
+    }
+
     return true;
   }
 
@@ -753,22 +1139,27 @@ export class GenAILiveClient extends EventEmitter<LiveClientEventTypes> {
       // The onclose listener will handle the final state change
       this.once('close', () => resolve(true));
 
+      // Manually save the conversation state before closing.
+      const { userTranscript, assistantTranscript, usage } = this._currentTurnState;
+      if (userTranscript || assistantTranscript) {
+        this.saveMessagesToBackend(userTranscript, assistantTranscript, usage);
+      }
+      this._currentTurnState = {
+        userTranscript: '',
+        assistantTranscript: '',
+        isInterrupted: false,
+        usage: null,
+      };
+
       if (this.session) {
-        // Manually save the conversation state before closing
-        const { userTranscript, assistantTranscript, usage } = this._currentTurnState;
-        if (userTranscript || assistantTranscript) {
-          this.saveMessagesToBackend(userTranscript, assistantTranscript, usage);
-        }
-
-        // Reset state after saving
-        this._currentTurnState = {
-          userTranscript: '',
-          assistantTranscript: '',
-          isInterrupted: false,
-          usage: null,
-        };
-
         this.session.close();
+      } else if (this.relaySocket) {
+        try {
+          this.relaySocket.close(1000, 'Client disconnect');
+        } catch {
+          this._status = 'disconnected';
+          resolve(true);
+        }
       } else {
         // If there's no session, we can resolve immediately
         // and ensure the state is correct.
@@ -791,11 +1182,19 @@ export class GenAILiveClient extends EventEmitter<LiveClientEventTypes> {
   }
 
   protected onerror(e: ErrorEvent) {
+    const normalizedMessage = e?.message?.trim() || 'Unable to connect to voice model. Please try again in a moment.';
+    const normalizedError = new ErrorEvent('error', {
+      message: normalizedMessage,
+      filename: e.filename,
+      lineno: e.lineno,
+      colno: e.colno,
+      error: e.error,
+    });
     sendErrorToSlack({
       message: 'GenAILiveClient WebSocket Error',
-      errorResponse: { message: e.message, filename: e.filename, lineno: e.lineno },
+      errorResponse: { message: normalizedMessage, filename: e.filename, lineno: e.lineno },
     });
-    this.emit('error', e);
+    this.emit('error', normalizedError);
   }
 
   protected onclose(e: CloseEvent) {
@@ -810,6 +1209,7 @@ export class GenAILiveClient extends EventEmitter<LiveClientEventTypes> {
       });
     }
     this._session = null;
+    this.relaySocket = null;
     this._status = 'disconnected';
     this.emit('close', e);
   }
@@ -825,6 +1225,7 @@ export class GenAILiveClient extends EventEmitter<LiveClientEventTypes> {
     }
 
     if (message.setupComplete) {
+      this.setupCompleteForCurrentConnection = true;
       this.emit('setupcomplete');
       return;
     }
@@ -921,6 +1322,19 @@ export class GenAILiveClient extends EventEmitter<LiveClientEventTypes> {
       return;
     }
 
+    if (this.relaySocket && this.relaySocket.readyState === WebSocket.OPEN) {
+      for (const ch of chunks) {
+        this.relaySocket.send(
+          JSON.stringify({
+            realtimeInput: {
+              mediaChunks: [ch],
+            },
+          }),
+        );
+      }
+      return;
+    }
+
     for (const ch of chunks) {
       this.session?.sendRealtimeInput({ media: ch });
     }
@@ -928,6 +1342,16 @@ export class GenAILiveClient extends EventEmitter<LiveClientEventTypes> {
 
   async sendText(text: string) {
     if (this.status !== 'connected') {
+      return;
+    }
+    if (this.relaySocket && this.relaySocket.readyState === WebSocket.OPEN) {
+      this.relaySocket.send(
+        JSON.stringify({
+          realtimeInput: {
+            text,
+          },
+        }),
+      );
       return;
     }
     this.session?.sendRealtimeInput({ text });

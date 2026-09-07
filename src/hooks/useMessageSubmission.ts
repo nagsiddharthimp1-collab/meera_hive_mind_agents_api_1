@@ -4,10 +4,7 @@ import { chatService } from '@/app/api/services/chat';
 import { useToast } from '@/components/ui/ToastProvider';
 import { createLocalTimestamp } from '@/lib/dateUtils';
 import { supabase } from '@/lib/supabaseClient';
-import {
-  ChatAttachmentInputState,
-  ChatMessageFromServer,
-} from '@/types/chat';
+import { ChatAttachmentInputState, ChatMessageFromServer } from '@/types/chat';
 import React, { MutableRefObject, useCallback, useRef } from 'react';
 
 interface UseMessageSubmissionProps {
@@ -47,20 +44,142 @@ type OutgoingAttachment = {
   storagePath: string;
 };
 
-async function uploadAttachmentToStorage(
-  file: File,
-  type: 'image' | 'document',
-): Promise<UploadedMeta> {
+function hasAssistantImageAttachment(message: ChatMessageFromServer): boolean {
+  return (message.attachments ?? []).some((attachment) => {
+    const type = String(attachment.type || '').toLowerCase();
+    const url = String(attachment.url || '').trim();
+    return Boolean(url && (type === 'image' || type.startsWith('image/')));
+  });
+}
+
+function hasExistingAssistantImage(messages: ChatMessageFromServer[]): boolean {
+  return messages.some((message) => {
+    if (message.content_type !== 'assistant') return false;
+    if (hasAssistantImageAttachment(message)) return true;
+    return Array.isArray(message.generatedImages) && message.generatedImages.length > 0;
+  });
+}
+
+function hasIncomingImageAttachment(attachments: ChatAttachmentInputState[]): boolean {
+  return attachments.some((attachment) => {
+    if (attachment.type === 'image') return true;
+    return attachment.file?.type?.startsWith('image/') ?? false;
+  });
+}
+
+function isLikelyImageGeneratePrompt(text: string): boolean {
+  const normalized = text.toLowerCase();
+  const hasImageNoun =
+    /\b(image|picture|photo|pic|illustration|drawing|artwork|render|wallpaper|poster|logo|avatar|thumbnail|mockup|icon)\b/.test(
+      normalized,
+    );
+  const hasGenerateVerb = /\b(generate|create|draw|make|render|illustrate|paint|sketch|design)\b/.test(normalized);
+  const hasShowOrSendImage = /\b(show|send|give)\b.*\b(image|picture|photo|pic)\b/.test(normalized);
+  return hasShowOrSendImage || (hasGenerateVerb && hasImageNoun);
+}
+
+function isLikelyImageEditPrompt(text: string): boolean {
+  const normalized = text.toLowerCase();
+  const hasEditVerb =
+    /\b(change|edit|modify|remove|replace|swap|erase|add|crop|blur|sharpen|resize|rotate|flip|brighten|darken|fix|retouch|enhance|improve|adjust|tweak|beautify|stylize|style|transform|restyle|convert|makeover)\b/.test(
+      normalized,
+    );
+  const hasTarget =
+    /\b(background|bg|colour|color|logo|text|font|watermark|person|people|object|sky|shirt|hair|eyes|face|layout|button|banner)\b/.test(
+      normalized,
+    );
+  if (hasEditVerb && hasTarget) return true;
+  if (/\b(change|set)\b.*\b(background|bg)\b.*\b(colou?r)\b/.test(normalized)) return true;
+  return false;
+}
+
+function isLikelyAttachmentEditCue(text: string): boolean {
+  const normalized = text.toLowerCase();
+  const hasTransformVerb =
+    /\b(edit|change|modify|remove|replace|add|improve|enhance|retouch|stylize|upscale|restore|clean|fix|make|turn|set|adjust|tweak|transform|restyle|convert|give)\b/.test(
+      normalized,
+    );
+  const hasImageRef = /\b(image|photo|picture|pic|portrait|selfie)\b/.test(normalized);
+  const hasStyleCue = /\b(look|style|vibe|theme|aesthetic|avatar|character|costume|outfit|filter)\b/.test(normalized);
+  const hasSubjectRef = /\b(him|her|them|me|my|our|it|this|that|face)\b/.test(normalized);
+  return hasTransformVerb && (hasImageRef || hasStyleCue || hasSubjectRef);
+}
+
+function isLikelyAttachmentReadCue(text: string): boolean {
+  return /\b(read|describe|analy[sz]e|explain|identify|ocr|transcribe|extract|summari[sz]e|caption|what(?:'s| is) in)\b/.test(
+    text.toLowerCase(),
+  );
+}
+
+function isLikelyAttachmentTextRewriteCue(text: string): boolean {
+  const normalized = text.toLowerCase();
+  const hasTextArtifact =
+    /\b(reply|response|message|email|mail|dm|inmail|linkedin|outreach|copy|caption|headline|bio|profile|note|draft|line|paragraph|sentence)\b/.test(
+      normalized,
+    );
+  const hasRewriteCue =
+    /\b(rewrite|rephrase|revise|polish|tighten|shorten|draft|write|compose|fix|edit|improve|clean)\b/.test(
+      normalized,
+    ) || /\b(crisp|crisper|concise|shorter|clearer|cleaner|better|professional|punchier)\b/.test(normalized);
+  return hasTextArtifact && hasRewriteCue;
+}
+
+function isLikelyAttachmentAdviceCue(text: string): boolean {
+  const normalized = text.toLowerCase();
+  return (
+    /\b(tell me what to do|what should i|what can i|how can i|how do i|how should i)\b/.test(normalized) ||
+    /\b(suggest|recommend|advise|advice|feedback|critique|review)\b/.test(normalized) ||
+    /\b(what|how)\b.*\b(change|improve|fix|clean|polish|adjust|tweak|make better)\b/.test(normalized)
+  );
+}
+
+function isLikelyImageTurnForLoadingStatus(
+  messageText: string,
+  attachments: ChatAttachmentInputState[],
+  messages: ChatMessageFromServer[],
+): boolean {
+  const hasImageAttachment = hasIncomingImageAttachment(attachments);
+  const hasGenerateIntent = isLikelyImageGeneratePrompt(messageText);
+  const hasEditIntent = isLikelyImageEditPrompt(messageText);
+  const hasAttachmentEditIntent = isLikelyAttachmentEditCue(messageText);
+  const hasAttachmentReadIntent = hasImageAttachment && isLikelyAttachmentReadCue(messageText);
+  const hasAttachmentRewriteIntent = hasImageAttachment && isLikelyAttachmentTextRewriteCue(messageText);
+  const hasAttachmentAdviceIntent = hasImageAttachment && isLikelyAttachmentAdviceCue(messageText);
+  const hasPreviousAssistantImage = hasExistingAssistantImage(messages);
+  const hasPreviousImageEditIntent =
+    hasPreviousAssistantImage &&
+    hasEditIntent &&
+    !hasAttachmentReadIntent &&
+    !hasAttachmentRewriteIntent &&
+    !hasAttachmentAdviceIntent;
+
+  return (
+    !hasAttachmentRewriteIntent &&
+    !hasAttachmentAdviceIntent &&
+    (hasGenerateIntent ||
+      hasPreviousImageEditIntent ||
+      (hasImageAttachment &&
+        (hasEditIntent || hasAttachmentEditIntent) &&
+        !hasAttachmentReadIntent &&
+        !hasAttachmentRewriteIntent))
+  );
+}
+
+function getErrorStatus(error: unknown): number | null {
+  if (!error || typeof error !== 'object') return null;
+  if ('status' in error && typeof error.status === 'number') return error.status;
+  return null;
+}
+
+async function uploadAttachmentToStorage(file: File, type: 'image' | 'document'): Promise<UploadedMeta> {
   const ext = file.name.includes('.') ? file.name.split('.').pop() || '' : '';
   const randomSuffix = Math.random().toString(36).slice(2);
   const path = `${Date.now()}-${randomSuffix}${ext ? '.' + ext : ''}`;
 
-  const { error: uploadError } = await supabase.storage
-    .from(ATTACHMENTS_BUCKET)
-    .upload(path, file, {
-      cacheControl: '3600',
-      upsert: false,
-    });
+  const { error: uploadError } = await supabase.storage.from(ATTACHMENTS_BUCKET).upload(path, file, {
+    cacheControl: '3600',
+    upsert: false,
+  });
 
   if (uploadError) {
     console.error('Supabase upload error', uploadError);
@@ -105,11 +224,7 @@ export const useMessageSubmission = ({
   const mostRecentAssistantMessageIdRef = useRef<string | null>(null);
 
   const createOptimisticMessage = useCallback(
-    (
-      optimisticId: string,
-      messageText: string,
-      attachments: ChatAttachmentInputState[],
-    ): ChatMessageFromServer => {
+    (optimisticId: string, messageText: string, attachments: ChatAttachmentInputState[]): ChatMessageFromServer => {
       const lastMessage = chatMessages[chatMessages.length - 1];
       let newTimestamp = new Date();
 
@@ -124,12 +239,7 @@ export const useMessageSubmission = ({
         timestamp: createLocalTimestamp(newTimestamp),
         attachments: attachments.map((att) => ({
           name: att.file.name,
-          type:
-            att.file.type === 'application/pdf'
-              ? 'document'
-              : att.type === 'image'
-              ? 'image'
-              : 'file',
+          type: att.file.type === 'application/pdf' ? 'document' : att.type === 'image' ? 'image' : 'file',
           url: att.publicUrl || att.previewUrl || '',
           size: att.file.size,
           file: att.file,
@@ -146,43 +256,28 @@ export const useMessageSubmission = ({
   }, []);
 
   /**
-   * IMPORTANT:
-   * Do not replace the entire chat array after streaming ends.
-   * Only patch the existing assistant placeholder with the latest server attachments.
-   * This prevents scroll jumps.
+   * IMPORTANT: Do not replace the entire chat array after streaming ends. Only patch the existing assistant placeholder
+   * with the latest server attachments. This prevents scroll jumps.
    */
   const refreshLatestMessagesFromServer = useCallback(
     async (assistantIdToPatch?: string) => {
       try {
         if (!assistantIdToPatch) return;
 
-        const res = await chatService.getChatHistory(1);
-        if (!res?.data || res.data.length === 0) return;
+        const res = await chatService.getMessageById(assistantIdToPatch);
+        const latestServerAssistant = res?.data as ChatMessageFromServer | null;
 
-        const rawMessages = res.data as ChatMessageFromServer[];
-
-        const serverMessages = rawMessages
-          .map((msg) => ({
-            ...msg,
-            attachments: msg.attachments ?? [],
-          }))
-          .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
-
-        const latestServerAssistant = [...serverMessages]
-          .reverse()
-          .find((m) => m.content_type === 'assistant');
-
-        if (!latestServerAssistant) return;
+        if (!latestServerAssistant || latestServerAssistant.content_type !== 'assistant') return;
 
         setChatMessages((prev) =>
           prev.map((m) =>
             m.message_id === assistantIdToPatch
               ? {
                   ...m,
-                  attachments:
-                    latestServerAssistant.attachments ?? m.attachments ?? [],
-                  finish_reason:
-                    latestServerAssistant.finish_reason ?? m.finish_reason ?? null,
+                  attachments: latestServerAssistant.attachments?.length
+                    ? latestServerAssistant.attachments
+                    : (m.attachments ?? []),
+                  finish_reason: latestServerAssistant.finish_reason ?? m.finish_reason ?? null,
                 }
               : m,
           ),
@@ -226,11 +321,7 @@ export const useMessageSubmission = ({
       let uploaded: UploadedMeta[] = [];
       if (hasAttachments) {
         try {
-          uploaded = await Promise.all(
-            attachments.map((att) =>
-              uploadAttachmentToStorage(att.file, att.type),
-            ),
-          );
+          uploaded = await Promise.all(attachments.map((att) => uploadAttachmentToStorage(att.file, att.type)));
         } catch (uploadErr) {
           console.error('Upload failed', uploadErr);
           showToast('Failed to upload file(s). Please try again.', {
@@ -241,27 +332,26 @@ export const useMessageSubmission = ({
         }
       }
 
-      const attachmentsWithStorage: ChatAttachmentInputState[] = attachments.map(
-        (att, index) => {
-          const meta = uploaded[index];
-          if (!meta) return att;
-          return {
-            ...att,
-            storagePath: meta.storagePath,
-            publicUrl: meta.publicUrl,
-          };
-        },
-      );
+      const attachmentsWithStorage: ChatAttachmentInputState[] = attachments.map((att, index) => {
+        const meta = uploaded[index];
+        if (!meta) return att;
+        return {
+          ...att,
+          storagePath: meta.storagePath,
+          publicUrl: meta.publicUrl,
+        };
+      });
 
       const optimisticId = optimisticIdToUpdate || `optimistic-${Date.now()}`;
+      const isImageGenerationTurn = isLikelyImageTurnForLoadingStatus(
+        trimmedMessage,
+        attachmentsWithStorage,
+        chatMessages,
+      );
 
       // STEP 2: optimistic user + assistant placeholder
       if (!optimisticIdToUpdate) {
-        const userMessage = createOptimisticMessage(
-          optimisticId,
-          trimmedMessage,
-          attachmentsWithStorage,
-        );
+        const userMessage = createOptimisticMessage(optimisticId, trimmedMessage, attachmentsWithStorage);
 
         const assistantMessageId = `assistant-${Date.now()}`;
         const emptyAssistantMessage: ChatMessageFromServer = {
@@ -270,6 +360,7 @@ export const useMessageSubmission = ({
           content_type: 'assistant',
           timestamp: createLocalTimestamp(),
           attachments: [],
+          isGeneratingImage: isImageGenerationTurn,
           try_number: tryNumber,
           failed: false,
           finish_reason: null,
@@ -278,7 +369,11 @@ export const useMessageSubmission = ({
         messageRelationshipMapRef.current.set(optimisticId, assistantMessageId);
         mostRecentAssistantMessageIdRef.current = assistantMessageId;
 
-        setChatMessages((prev) => [...prev, userMessage, emptyAssistantMessage]);
+        setChatMessages((prev) => [
+          ...prev,
+          userMessage,
+          emptyAssistantMessage,
+        ]);
 
         clearAllInput();
         onMessageSent?.();
@@ -287,11 +382,7 @@ export const useMessageSubmission = ({
         setTimeout(() => scrollToBottom(true, true), 150);
       } else {
         setChatMessages((prev) =>
-          prev.map((msg) =>
-            msg.message_id === optimisticId
-              ? { ...msg, failed: false, try_number: tryNumber }
-              : msg,
-          ),
+          prev.map((msg) => (msg.message_id === optimisticId ? { ...msg, failed: false, try_number: tryNumber } : msg)),
         );
       }
 
@@ -319,6 +410,20 @@ export const useMessageSubmission = ({
         await chatService.streamMessage({
           message: trimmedMessage,
           attachments: outgoingAttachments,
+          onMeta: (meta) => {
+            const messageType = String(meta?.messageType || '').trim().toLowerCase();
+            if (!messageType) return;
+            setChatMessages((prev) =>
+              prev.map((msg) =>
+                msg.message_id === optimisticId
+                  ? {
+                      ...msg,
+                      message_type: messageType,
+                    }
+                  : msg,
+              ),
+            );
+          },
           onDelta: (delta) => {
             fullAssistantText += delta;
             if (!assistantId) return;
@@ -350,7 +455,12 @@ export const useMessageSubmission = ({
                           fullAssistantText ||
                           'Sorry, I could not generate a response. Please try again.',
                         failed: false,
+                        isGeneratingImage: false,
                         try_number: tryNumber,
+                        attachments:
+                          finalMsg?.attachments && finalMsg.attachments.length > 0
+                            ? finalMsg.attachments
+                            : (msg.attachments ?? []),
                       }
                     : msg,
                 ),
@@ -368,6 +478,18 @@ export const useMessageSubmission = ({
         return;
       } catch (error) {
         console.error('Error sending message:', error);
+        const status = getErrorStatus(error);
+
+        if (status === 402) {
+          showToast('Payment required to continue chatting. Redirecting to checkout…', {
+            type: 'info',
+            position: 'conversation',
+          });
+          if (typeof window !== 'undefined') {
+            window.location.href = '/payment';
+          }
+          return;
+        }
 
         showToast('Failed to respond, try again', {
           type: 'error',
@@ -381,6 +503,7 @@ export const useMessageSubmission = ({
               return {
                 ...msg,
                 failed: true,
+                isGeneratingImage: false,
                 failedMessage: 'Failed to respond, try again',
               };
             }
@@ -437,13 +560,7 @@ export const useMessageSubmission = ({
         });
 
       if (messageContent || retryAttachments.length > 0) {
-        executeSubmission(
-          messageContent,
-          retryAttachments,
-          nextTryNumber,
-          failedMessageId,
-          true,
-        );
+        executeSubmission(messageContent, retryAttachments, nextTryNumber, failedMessageId, true);
       }
     },
     [executeSubmission],
@@ -454,7 +571,11 @@ export const useMessageSubmission = ({
       e.preventDefault();
       executeSubmission(message, currentAttachments);
     },
-    [executeSubmission, message, currentAttachments],
+    [
+      executeSubmission,
+      message,
+      currentAttachments,
+    ],
   );
 
   const getMostRecentAssistantMessageId = useCallback(() => {

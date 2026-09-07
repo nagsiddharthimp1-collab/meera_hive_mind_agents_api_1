@@ -1,0 +1,20 @@
+{
+  "deployment_id": "dpl_6ymNf8n1gXrcP3WtCH9uQgCYpyL6",
+  "deployment_url": "meera-frontendv2-fttmyt0ti-ss-projects-147424ea.vercel.app",
+  "target": "production",
+  "source": "cli",
+  "created_at": 1777371448882,
+  "git_meta": {
+    "gitCommitAuthorName": "siddharthnag-source",
+    "gitCommitAuthorEmail": "siddharth.nag@himeera.com",
+    "gitCommitMessage": "fix(chat): snapshot deployed stream and web-search resilience updates",
+    "gitCommitRef": "main",
+    "gitCommitSha": "a61f3a1b401ce069ef430ec06701658b297a60f7",
+    "gitDirty": "1",
+    "lambdaRuntimeStats": "{\"nodejs\":4}"
+  },
+  "extracted_source_root": "src",
+  "extracted_at": "2026-04-29T11:25:36.494Z",
+  "file_count": 162,
+  "directory_count": 38
+}

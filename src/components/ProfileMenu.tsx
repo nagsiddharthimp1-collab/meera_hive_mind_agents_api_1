@@ -1,10 +1,18 @@
 'use client';
 
-import { isPaidPlanActive } from '@/lib/subscriptionUtils';
 import type { SubscriptionData } from '@/types/subscription';
-import React from 'react';
+import {
+  calculateEstimatedValueUsdc,
+  calculateMeeraEarned,
+  formatEstimatedValueUsdc,
+  formatMeeraPlain,
+  type MeeraPriceResponse,
+} from '@/lib/meeraRewards';
+import { isPaidPlanActive } from '@/lib/subscriptionUtils';
+import { MeeraRewardsDialog } from '@/components/MeeraRewardsDialog';
+import React, { useEffect, useMemo, useState } from 'react';
 import { FaCrown } from 'react-icons/fa6';
-import { FiLogOut, FiSettings } from 'react-icons/fi';
+import { FiInfo, FiLogOut, FiSettings } from 'react-icons/fi';
 
 interface ProfileMenuProps {
   isOpen: boolean;
@@ -29,13 +37,60 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
   isSubscriptionLoading = false,
   anchor = 'sidebar-bottom',
 }) => {
+  const tokenText = String(tokensConsumed ?? '').trim() || '0';
+  const [price, setPrice] = useState<MeeraPriceResponse | null>(null);
+  const [isPriceLoading, setIsPriceLoading] = useState(false);
+  const [priceError, setPriceError] = useState<string | null>(null);
+  const [isRewardsDialogOpen, setIsRewardsDialogOpen] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    let cancelled = false;
+    setIsPriceLoading(true);
+    setPriceError(null);
+
+    fetch('/api/meera/price')
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`Price request failed with ${response.status}`);
+        return (await response.json()) as MeeraPriceResponse;
+      })
+      .then((nextPrice) => {
+        if (!cancelled) setPrice(nextPrice);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setPrice(null);
+          setPriceError(error instanceof Error ? error.message : 'Unable to load price');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsPriceLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen]);
+
+  const meeraEarned = useMemo(() => calculateMeeraEarned(tokenText), [tokenText]);
+  const estimatedValue = useMemo(
+    () => calculateEstimatedValueUsdc(meeraEarned, price?.priceUsdc ?? null),
+    [meeraEarned, price?.priceUsdc],
+  );
+
   if (!isOpen) return null;
 
-  const tokenText = tokensConsumed?.trim() || '0';
   const hasActivePro = isPaidPlanActive(subscriptionData);
   const isPlanPending = isSubscriptionLoading || !subscriptionData;
   const isUpgradeDisabled = hasActivePro || isPlanPending;
   const upgradeLabel = isPlanPending ? 'Checking plan...' : hasActivePro ? 'Pro Activated' : 'Upgrade to Pro';
+  const estimatedValueText = isPriceLoading
+    ? 'Loading...'
+    : priceError || price?.priceUsdc == null
+      ? 'Unavailable'
+      : formatEstimatedValueUsdc(estimatedValue);
+  const estimatedUsdText = estimatedValueText.replace(/\s+USDC$/, '');
 
   const menuPositionClass =
     anchor === 'top-left'
@@ -64,10 +119,26 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
           </button>
         </div>
 
-        <div className="px-3 pt-2.5 pb-3 border-b border-primary/15">
-          <p className="text-[11px] uppercase tracking-[0.12em] text-primary/60">Tokens consumed</p>
-          <div className="mt-1.5 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5">
-            <p className="text-base font-medium text-primary">{tokenText}</p>
+        <div className="px-3 pt-2 pb-2.5 border-b border-primary/15 space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm font-semibold text-primary">#MEERA Tokens Earned</p>
+            <button
+              type="button"
+              onClick={() => setIsRewardsDialogOpen(true)}
+              className="grid h-6 w-6 place-items-center rounded-md text-primary/70 transition-colors hover:bg-primary/10 hover:text-primary"
+              aria-label="Open MEERA Rewards"
+              title="AI tokens are consumed when you use Meera. Your usage is converted into MEERA rewards."
+            >
+              <FiInfo size={14} />
+            </button>
+          </div>
+          <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2">
+            <div className="flex items-center justify-between gap-3">
+              <p className="min-w-0 truncate text-base font-medium text-primary">{formatMeeraPlain(meeraEarned)}</p>
+              <p className="shrink-0 text-right text-xs font-semibold text-primary/70">
+                {estimatedUsdText}
+              </p>
+            </div>
           </div>
         </div>
 
@@ -88,6 +159,8 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
           </button>
         </footer>
       </section>
+
+      <MeeraRewardsDialog isOpen={isRewardsDialogOpen} onClose={() => setIsRewardsDialogOpen(false)} />
     </div>
   );
 };

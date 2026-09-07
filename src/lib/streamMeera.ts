@@ -16,6 +16,27 @@ type ChatRequestAttachment = {
   storagePath?: string;
 };
 
+type ChatResponseImage = {
+  mimeType?: string;
+  data: string;
+  dataUrl?: string;
+};
+
+type ChatResponseAttachment = {
+  name?: string;
+  type?: string;
+  url?: string;
+  size?: number;
+};
+
+type ChatDonePayload = {
+  content?: string;
+  assistantMessageId?: string;
+  sessionId?: string;
+  images?: ChatResponseImage[];
+  attachments?: ChatResponseAttachment[];
+};
+
 type GeminiPart = {
   text?: string;
   thought?: boolean;
@@ -34,6 +55,9 @@ type GeminiSseChunk = {
   sessionId?: string;
   webSearchEnabled?: boolean;
   webSearchTriggerReason?: string;
+  messageType?: string;
+  conversationClass?: string;
+  model?: string;
 
   // Gemini SSE payload
   candidates?: GeminiCandidate[];
@@ -74,7 +98,7 @@ export async function streamMeera({
 
   onAnswerDelta: (t: string) => void;
   onMeta?: (meta: GeminiSseChunk) => void;
-  onDone?: () => void;
+  onDone?: (finalMsg?: ChatDonePayload) => void;
   onError?: (e: unknown) => void;
   signal?: AbortSignal;
   idleTimeoutMs?: number;
@@ -137,7 +161,10 @@ export async function streamMeera({
     resetIdleTimer();
 
     if (!res.ok) {
-      throw new Error(await res.text());
+      const rawError = await res.text();
+      const error = new Error(rawError || `Chat request failed with status ${res.status}`);
+      (error as Error & { status?: number }).status = res.status;
+      throw error;
     }
 
     const contentType = res.headers.get('content-type') || '';
@@ -148,6 +175,11 @@ export async function streamMeera({
         sessionId?: string;
         webSearchEnabled?: boolean;
         webSearchTriggerReason?: string;
+        messageType?: string;
+        conversationClass?: string;
+        model?: string;
+        images?: ChatResponseImage[];
+        attachments?: ChatResponseAttachment[];
       };
       if (json?.sessionId || json?.assistantMessageId) {
         onMeta?.({
@@ -156,11 +188,20 @@ export async function streamMeera({
           sessionId: json.sessionId,
           webSearchEnabled: json.webSearchEnabled,
           webSearchTriggerReason: json.webSearchTriggerReason,
+          messageType: json.messageType,
+          conversationClass: json.conversationClass,
+          model: json.model,
         });
       }
       const reply = String(json?.reply || '').trim();
       if (reply) onAnswerDelta(reply);
-      onDone?.();
+      onDone?.({
+        content: reply,
+        assistantMessageId: json.assistantMessageId,
+        sessionId: json.sessionId,
+        images: Array.isArray(json.images) ? json.images : [],
+        attachments: Array.isArray(json.attachments) ? json.attachments : [],
+      });
       return;
     }
 

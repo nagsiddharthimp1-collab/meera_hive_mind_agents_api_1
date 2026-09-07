@@ -1,11 +1,13 @@
 'use client';
 
 import { Dialog } from '@/components/ui/Dialog';
+import { OpenInBrowserDialog } from '@/components/auth/OpenInBrowserDialog';
 import { usePricingModal } from '@/contexts/PricingModalContext';
 // import { usePWAInstall } from '@/contexts/PWAInstallContext';
 import { useSubscriptionStatus } from '@/hooks/useSubscriptionStatus';
 import { useTotalCostTokens } from '@/hooks/useTotalCostTokens';
 import { getGuestToken, GUEST_TOKEN_COOKIE_KEY } from '@/lib/authRedirect';
+import { startGoogleOAuth } from '@/lib/auth/startGoogleOAuth';
 import { isPaidPlanActive } from '@/lib/subscriptionUtils';
 import { AnimatePresence, motion } from 'framer-motion';
 import Image from 'next/image';
@@ -46,6 +48,15 @@ export const UserProfile = ({ isOpen, onClose }: UserProfileProps) => {
     refetch: refetchSubscription,
   } = useSubscriptionStatus();
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
+  const [openInBrowserState, setOpenInBrowserState] = useState<{
+    isOpen: boolean;
+    openUrl: string;
+    browserHint: 'Safari' | 'Chrome';
+  }>({
+    isOpen: false,
+    openUrl: '',
+    browserHint: 'Safari',
+  });
   const [user, setUser] = useState<User | null>(null);
   // const { installPrompt, isStandalone, isIOS, handleInstallClick } = usePWAInstall();
   const { openModal } = usePricingModal();
@@ -90,7 +101,7 @@ export const UserProfile = ({ isOpen, onClose }: UserProfileProps) => {
   };
 
   // Handle Google sign in via Supabase
-  const handleGoogleSignIn = () => {
+  const handleGoogleSignIn = async () => {
     // Set cookies before initiating OAuth
     if (referralId) {
       document.cookie = `referral_id=${referralId}; path=/; max-age=3600; SameSite=Lax`;
@@ -101,15 +112,18 @@ export const UserProfile = ({ isOpen, onClose }: UserProfileProps) => {
       document.cookie = `${GUEST_TOKEN_COOKIE_KEY}=${guestToken}; path=/; max-age=3600; SameSite=Lax`;
     }
 
-    supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-        queryParams: {
-          prompt: 'select_account',
-        },
-      },
-    });
+    const result = await startGoogleOAuth();
+    if (result.status === 'blocked_in_embedded_browser') {
+      setOpenInBrowserState({
+        isOpen: true,
+        openUrl: result.openUrl,
+        browserHint: result.browserHint,
+      });
+      return;
+    }
+    if (result.status === 'failed') {
+      console.error('Google login error:', result.message);
+    }
   };
 
   const handleUpgradeClick = () => {
@@ -233,6 +247,10 @@ export const UserProfile = ({ isOpen, onClose }: UserProfileProps) => {
                           label: 'Help & Support',
                           action: () =>
                             (window.location.href = 'mailto:siddharth.nag@himeera.com'),
+                        },
+                        {
+                          label: 'Whitepaper',
+                          action: () => window.open('/whitepaper', '_blank'),
                         },
                         {
                           label: 'Terms of Service',
@@ -397,6 +415,18 @@ export const UserProfile = ({ isOpen, onClose }: UserProfileProps) => {
           }}
         />
       )}
+
+      <OpenInBrowserDialog
+        isOpen={openInBrowserState.isOpen}
+        openUrl={openInBrowserState.openUrl}
+        browserHint={openInBrowserState.browserHint}
+        onClose={() =>
+          setOpenInBrowserState((prev) => ({
+            ...prev,
+            isOpen: false,
+          }))
+        }
+      />
     </>
   );
 };
