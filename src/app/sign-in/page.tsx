@@ -274,28 +274,43 @@ function SignInClient() {
             ))}
           </div>
 
-          <div className="mx-auto mt-16 grid max-w-6xl overflow-hidden rounded-[2rem] bg-primary text-background sm:mt-20 sm:rounded-[2.75rem] lg:grid-cols-[1fr_auto] lg:items-end">
-            <div className="p-8 sm:p-12 lg:p-16">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-background/50 sm:text-xs">
-                Conscious Intelligence
-              </p>
-              <h2 className="mt-5 max-w-3xl font-serif text-[clamp(2.6rem,6vw,5rem)] font-normal leading-[0.95] tracking-[-0.04em]">
-                7,850+ Minds. One Hive Mind.
-              </h2>
-              <p className="mt-6 max-w-xl text-sm leading-7 text-background/65 sm:text-base">
-                Meera is powered by Conscious Intelligence (CI) through the Hive Mind—bringing many minds into one thoughtful companion.
-              </p>
-            </div>
+          <div className="relative mx-auto mt-16 max-w-6xl overflow-hidden rounded-[2rem] bg-primary text-background sm:mt-20 sm:rounded-[3rem]">
+            <div
+              aria-hidden="true"
+              className="absolute -right-14 -top-14 h-40 w-40 rounded-full bg-[radial-gradient(circle_at_32%_28%,#ff6568_0%,#ed1c24_34%,#6d0005_66%,#080000_100%)] opacity-90 shadow-[0_0_90px_rgba(237,28,36,0.26)] sm:-right-12 sm:-top-20 sm:h-64 sm:w-64 lg:right-8 lg:top-8"
+            />
+            <div aria-hidden="true" className="absolute bottom-0 left-1/2 h-px w-[82%] -translate-x-1/2 bg-background/12" />
 
-            <button
-              onClick={handleGoogleSignIn}
-              className="group m-8 mt-0 flex h-14 items-center justify-center rounded-full border border-background/25 px-7 text-sm font-medium text-background transition-colors hover:bg-background hover:text-primary sm:m-12 sm:mt-0 lg:m-16 lg:ml-0 lg:w-48"
-            >
-              Talk to Meera
-              <span className="ml-2 transition-transform duration-300 group-hover:translate-x-1" aria-hidden="true">
-                →
-              </span>
-            </button>
+            <div className="relative px-7 py-11 sm:px-12 sm:py-16 lg:px-16 lg:py-20">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.34em] text-background/45 sm:text-xs">
+                The Hive Mind
+              </p>
+
+              <div className="mt-12 sm:mt-16 lg:mt-20">
+                <p className="font-serif text-[clamp(5.5rem,16vw,11rem)] font-normal leading-[0.68] tracking-[-0.07em]">
+                  7,850+
+                </p>
+                <h2 className="mt-7 max-w-3xl font-serif text-[clamp(2.5rem,6vw,5.5rem)] font-normal leading-[0.92] tracking-[-0.045em] sm:mt-10">
+                  Minds. One Hive Mind.
+                </h2>
+              </div>
+
+              <div className="mt-12 flex flex-col gap-8 border-t border-background/15 pt-7 sm:mt-16 sm:flex-row sm:items-center sm:justify-between sm:pt-8">
+                <p className="max-w-md text-sm leading-6 text-background/58 sm:text-base">
+                  Powered by Conscious Intelligence (CI).
+                </p>
+
+                <button
+                  onClick={handleGoogleSignIn}
+                  className="group flex h-14 w-full items-center justify-center rounded-full bg-background px-7 text-sm font-semibold text-primary transition-transform duration-300 hover:-translate-y-0.5 sm:w-52"
+                >
+                  Talk to Meera
+                  <span className="ml-2 transition-transform duration-300 group-hover:translate-x-1" aria-hidden="true">
+                    →
+                  </span>
+                </button>
+              </div>
+            </div>
           </div>
 
           <footer className="mt-16 flex flex-col items-center justify-between gap-5 border-t border-primary/10 pt-7 text-xs text-primary/45 sm:flex-row sm:mt-20">
