@@ -216,8 +216,10 @@ function SignInClient() {
     if (!rail) return;
 
     const firstSlide = rail.firstElementChild as HTMLElement | null;
+    const railStyles = window.getComputedStyle(rail);
+    const railGap = Number.parseFloat(railStyles.columnGap || railStyles.gap) || 0;
     rail.scrollBy({
-      left: direction * ((firstSlide?.offsetWidth ?? rail.clientWidth * 0.78) + 20),
+      left: direction * ((firstSlide?.offsetWidth ?? rail.clientWidth * 0.78) + railGap),
       behavior: 'smooth',
     });
   };
@@ -339,8 +341,8 @@ function SignInClient() {
             ))}
           </div>
 
-          <div className="mx-auto mt-24 max-w-6xl sm:mt-32 lg:mt-40">
-            <div className="grid items-end gap-7 border-b border-primary/10 pb-8 sm:pb-10 lg:grid-cols-[0.78fr_1.22fr] lg:gap-14">
+          <div className="mx-auto mt-24 max-w-6xl sm:mt-28 lg:mt-32">
+            <div className="grid items-end gap-7 border-b border-primary/10 pb-8 sm:pb-10 lg:grid-cols-2 lg:gap-5">
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-[0.34em] text-primary/40 sm:text-xs">
                   Voices across cities
@@ -352,7 +354,7 @@ function SignInClient() {
               </h2>
             </div>
 
-            <div className="mt-5 flex items-center justify-between gap-6">
+            <div className="mt-4 flex items-center justify-between gap-6 sm:mt-5">
               <p className="text-[10px] uppercase tracking-[0.22em] text-primary/32">01 — 06</p>
               <div className="flex gap-2" aria-label="Testimonial controls">
                 <button
@@ -376,7 +378,7 @@ function SignInClient() {
 
             <div
               ref={testimonialRailRef}
-              className="hide-scrollbar -mx-5 mt-4 flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth px-5 pb-2 sm:-mx-9 sm:px-9 lg:mx-0 lg:gap-5 lg:px-0"
+              className="hide-scrollbar -mx-5 mt-3 flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth px-5 pb-2 sm:-mx-9 sm:mt-4 sm:px-9 lg:mx-0 lg:gap-5 lg:px-0"
               aria-label="What people say about Meera"
               tabIndex={0}
             >
@@ -384,7 +386,7 @@ function SignInClient() {
                 <article
                   key={testimonial.name}
                   className={cn(
-                    'relative flex min-h-[22rem] w-[80vw] max-w-[38rem] shrink-0 snap-start snap-always flex-col justify-between overflow-hidden rounded-[1.6rem] border p-6 sm:min-h-[25rem] sm:w-[52vw] sm:rounded-[2rem] sm:p-8 lg:w-[40vw] lg:p-9',
+                    'relative flex min-h-[22rem] w-[calc(100vw-4rem)] max-w-[38rem] shrink-0 snap-start snap-always flex-col justify-between overflow-hidden rounded-[1.6rem] border p-6 sm:min-h-[25rem] sm:w-[62vw] sm:max-w-[32rem] sm:rounded-[2rem] sm:p-8 lg:w-[calc((100%-1.25rem)/2)] lg:max-w-none lg:p-9',
                     index === 3
                       ? 'border-primary bg-primary text-background'
                       : 'border-primary/10 bg-background/60 text-primary',
@@ -445,7 +447,7 @@ function SignInClient() {
             </p>
           </div>
 
-          <div className="relative mx-auto mt-24 max-w-6xl overflow-hidden rounded-[2rem] bg-primary text-background sm:mt-32 sm:rounded-[3rem] lg:mt-40">
+          <div className="relative mx-auto mt-24 max-w-6xl overflow-hidden rounded-[2rem] bg-primary text-background sm:mt-28 sm:rounded-[3rem] lg:mt-32">
             <div
               aria-hidden="true"
               className="absolute -right-14 -top-14 h-40 w-40 rounded-full bg-[radial-gradient(circle_at_32%_28%,#ff6568_0%,#ed1c24_34%,#6d0005_66%,#080000_100%)] opacity-90 shadow-[0_0_90px_rgba(237,28,36,0.26)] sm:-right-12 sm:-top-20 sm:h-64 sm:w-64 lg:right-8 lg:top-8"
@@ -484,7 +486,7 @@ function SignInClient() {
             </div>
           </div>
 
-          <footer className="mt-16 flex flex-col items-center justify-between gap-5 border-t border-primary/10 pt-7 text-xs text-primary/45 sm:flex-row sm:mt-20">
+          <footer className="mx-auto mt-16 flex w-full max-w-6xl flex-col items-center justify-between gap-5 border-t border-primary/10 pt-7 text-xs text-primary/45 sm:mt-20 sm:flex-row">
             <div className="inline-flex items-center gap-2">
               <Image src="/icons/meera.svg" alt="" width={20} height={20} className="h-5 w-5" />
               <span>Meera · Your personal companion</span>
