@@ -103,6 +103,15 @@ const testimonials = [
     country: 'United Kingdom',
     coordinates: '51.51° N  ·  0.13° W',
   },
+  {
+    quote:
+      'Mind-blowing conversation fluidity. I used it for 30 minutes, and it is one of the most fluid conversations I have had with an AI. Pretty convincing so far.',
+    name: 'Aditya Tiwari',
+    city: 'New Delhi',
+    code: 'DEL',
+    country: 'India',
+    coordinates: '28.61° N  ·  77.21° E',
+  },
 ] as const;
 
 function SignInClient() {
@@ -206,8 +215,9 @@ function SignInClient() {
     const rail = testimonialRailRef.current;
     if (!rail) return;
 
+    const firstSlide = rail.firstElementChild as HTMLElement | null;
     rail.scrollBy({
-      left: direction * Math.min(rail.clientWidth * 0.84, 820),
+      left: direction * ((firstSlide?.offsetWidth ?? rail.clientWidth * 0.78) + 20),
       behavior: 'smooth',
     });
   };
@@ -330,25 +340,25 @@ function SignInClient() {
           </div>
 
           <div className="mx-auto mt-24 max-w-6xl sm:mt-32 lg:mt-40">
-            <div className="grid items-end gap-8 border-b border-primary/10 pb-10 sm:pb-12 lg:grid-cols-[0.72fr_1.28fr] lg:gap-16">
+            <div className="grid items-end gap-7 border-b border-primary/10 pb-8 sm:pb-10 lg:grid-cols-[0.78fr_1.22fr] lg:gap-14">
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-[0.34em] text-primary/40 sm:text-xs">
                   Voices across cities
                 </p>
                 <p className="mt-4 text-xs leading-5 text-primary/40">Swipe or drag to move sideways</p>
               </div>
-              <h2 className="text-balance font-serif text-[clamp(2.8rem,6vw,5.6rem)] font-normal leading-[0.92] tracking-[-0.045em]">
+              <h2 className="max-w-3xl text-balance font-serif text-[clamp(2.35rem,5vw,4.5rem)] font-normal leading-[0.94] tracking-[-0.04em]">
                 Different places. The same feeling of being heard.
               </h2>
             </div>
 
             <div className="mt-5 flex items-center justify-between gap-6">
-              <p className="text-[10px] uppercase tracking-[0.22em] text-primary/32">01 — 05</p>
+              <p className="text-[10px] uppercase tracking-[0.22em] text-primary/32">01 — 06</p>
               <div className="flex gap-2" aria-label="Testimonial controls">
                 <button
                   type="button"
                   onClick={() => moveTestimonials(-1)}
-                  className="flex h-11 w-11 items-center justify-center rounded-full border border-primary/12 text-lg text-primary/55 transition-colors hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-primary/12 text-sm text-primary/55 transition-colors hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                   aria-label="Previous testimonial"
                 >
                   ←
@@ -356,7 +366,7 @@ function SignInClient() {
                 <button
                   type="button"
                   onClick={() => moveTestimonials(1)}
-                  className="flex h-11 w-11 items-center justify-center rounded-full border border-primary/12 text-lg text-primary/55 transition-colors hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-primary/12 text-sm text-primary/55 transition-colors hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                   aria-label="Next testimonial"
                 >
                   →
@@ -366,7 +376,7 @@ function SignInClient() {
 
             <div
               ref={testimonialRailRef}
-              className="hide-scrollbar -mx-5 mt-5 flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth px-5 pb-2 sm:-mx-9 sm:gap-5 sm:px-9 lg:mx-0 lg:px-0"
+              className="hide-scrollbar -mx-5 mt-4 flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth px-5 pb-2 sm:-mx-9 sm:px-9 lg:mx-0 lg:gap-5 lg:px-0"
               aria-label="What people say about Meera"
               tabIndex={0}
             >
@@ -374,7 +384,7 @@ function SignInClient() {
                 <article
                   key={testimonial.name}
                   className={cn(
-                    'relative flex min-h-[28rem] w-[84vw] max-w-[47rem] shrink-0 snap-start snap-always flex-col justify-between overflow-hidden rounded-[2rem] border p-7 sm:min-h-[32rem] sm:w-[68vw] sm:rounded-[2.5rem] sm:p-10 lg:w-[56vw] lg:p-12',
+                    'relative flex min-h-[22rem] w-[80vw] max-w-[38rem] shrink-0 snap-start snap-always flex-col justify-between overflow-hidden rounded-[1.6rem] border p-6 sm:min-h-[25rem] sm:w-[52vw] sm:rounded-[2rem] sm:p-8 lg:w-[40vw] lg:p-9',
                     index === 3
                       ? 'border-primary bg-primary text-background'
                       : 'border-primary/10 bg-background/60 text-primary',
@@ -388,7 +398,7 @@ function SignInClient() {
                         ? 'bg-[linear-gradient(rgba(255,255,255,0.75)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.75)_1px,transparent_1px)]'
                         : 'bg-[linear-gradient(rgba(12,60,38,0.85)_1px,transparent_1px),linear-gradient(90deg,rgba(12,60,38,0.85)_1px,transparent_1px)]',
                     )}
-                    style={{ backgroundSize: '36px 36px' }}
+                    style={{ backgroundSize: '30px 30px' }}
                   />
 
                   <div className="relative flex items-start justify-between gap-6">
@@ -403,18 +413,18 @@ function SignInClient() {
                       </p>
                       <p className="mt-2 text-xs uppercase tracking-[0.16em] opacity-45">{testimonial.country}</p>
                     </div>
-                    <span className="font-serif text-[3.7rem] leading-none tracking-[-0.06em] opacity-[0.13] sm:text-[5.5rem]">
+                    <span className="font-serif text-[2.8rem] leading-none tracking-[-0.06em] opacity-[0.12] sm:text-[4rem]">
                       {testimonial.code}
                     </span>
                   </div>
 
-                  <blockquote className="relative my-12 max-w-[38rem] font-serif text-[clamp(2rem,4.2vw,4rem)] leading-[1.02] tracking-[-0.035em]">
+                  <blockquote className="relative my-8 max-w-[34rem] font-serif text-[clamp(1.55rem,3vw,2.75rem)] leading-[1.06] tracking-[-0.03em] sm:my-10">
                     “{testimonial.quote}”
                   </blockquote>
 
                   <div
                     className={cn(
-                      'relative flex flex-col gap-5 border-t pt-6 sm:flex-row sm:items-end sm:justify-between',
+                      'relative flex flex-col gap-4 border-t pt-5 sm:flex-row sm:items-end sm:justify-between',
                       index === 3 ? 'border-background/15' : 'border-primary/10',
                     )}
                   >
@@ -444,7 +454,7 @@ function SignInClient() {
 
             <div className="relative px-7 py-11 sm:px-12 sm:py-16 lg:px-16 lg:py-20">
               <p className="text-[10px] font-semibold uppercase tracking-[0.34em] text-background/45 sm:text-xs">
-                The Hive Mind
+                Conscious Intelligence
               </p>
 
               <div className="mt-12 sm:mt-16 lg:mt-20">
@@ -458,7 +468,7 @@ function SignInClient() {
 
               <div className="mt-12 flex flex-col gap-8 border-t border-background/15 pt-7 sm:mt-16 sm:flex-row sm:items-center sm:justify-between sm:pt-8">
                 <p className="max-w-md text-sm leading-6 text-background/58 sm:text-base">
-                  Powered by Conscious Intelligence (CI).
+                  Many minds, gathered into one thoughtful companion.
                 </p>
 
                 <button
