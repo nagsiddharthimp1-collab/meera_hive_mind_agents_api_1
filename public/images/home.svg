@@ -10,7 +10,7 @@
     .orbit-ring {
       transform-box: fill-box;
       transform-origin: center;
-      animation: orbit-turn 54s linear infinite;
+      animation: orbit-turn 42s linear infinite;
     }
 
     .halo-outer,
@@ -31,16 +31,25 @@
       will-change: transform;
     }
 
-    .message-kannada { animation: drift-a 10s ease-in-out -2s infinite; }
-    .message-cheated { animation: drift-b 12s ease-in-out -5s infinite; }
-    .message-christianity { animation: drift-c 13s ease-in-out -7s infinite; }
-    .message-anxiety { animation: drift-a 11s ease-in-out -8s infinite reverse; }
-    .message-hindi { animation: drift-b 14s ease-in-out -3s infinite reverse; }
-    .meera-label { animation: drift-c 8s ease-in-out -4s infinite; }
+    .message-kannada { --copy-phase: -1s; animation: planet-left 18s ease-in-out -4s infinite; }
+    .message-cheated { --copy-phase: -3s; animation: planet-top 22s ease-in-out -9s infinite; }
+    .message-christianity { --copy-phase: -6s; animation: planet-bottom 24s ease-in-out -15s infinite; }
+    .message-anxiety { --copy-phase: -9s; animation: planet-right 20s ease-in-out -11s infinite; }
+    .message-hindi { --copy-phase: -12s; animation: planet-upper-left 26s ease-in-out -18s infinite; }
+    .meera-label { animation: label-orbit 12s ease-in-out -4s infinite; }
 
-    .icon-person { animation: float-icon 9s ease-in-out -2s infinite; }
-    .icon-chat { animation: float-icon 8s ease-in-out -5s infinite reverse; }
-    .icon-learn { animation: float-icon 10s ease-in-out -7s infinite; }
+    .icon-person { animation: satellite-right 16s ease-in-out -7s infinite; }
+    .icon-chat { animation: satellite-left 14s ease-in-out -5s infinite; }
+    .icon-learn { animation: satellite-lower 18s ease-in-out -12s infinite; }
+
+    .rotating-copy {
+      opacity: 0;
+      animation: copy-cycle 15s ease-in-out infinite;
+    }
+
+    .copy-1 { opacity: 1; animation-delay: var(--copy-phase, 0s); }
+    .copy-2 { animation-delay: calc(var(--copy-phase, 0s) + 5s); }
+    .copy-3 { animation-delay: calc(var(--copy-phase, 0s) + 10s); }
 
     @keyframes orbit-turn {
       to { transform: rotate(360deg); }
@@ -56,27 +65,73 @@
       50% { transform: scale(1.035); }
     }
 
-    @keyframes drift-a {
+    @keyframes planet-left {
       0%, 100% { transform: translate(0, 0); }
-      35% { transform: translate(2px, -3px); }
-      70% { transform: translate(-1px, 2px); }
+      25% { transform: translate(6px, -5px); }
+      50% { transform: translate(12px, 0); }
+      75% { transform: translate(6px, 5px); }
     }
 
-    @keyframes drift-b {
+    @keyframes planet-top {
       0%, 100% { transform: translate(0, 0); }
-      40% { transform: translate(-2px, -2px); }
-      75% { transform: translate(2px, 1px); }
+      25% { transform: translate(-5px, 5px); }
+      50% { transform: translate(0, 10px); }
+      75% { transform: translate(5px, 5px); }
     }
 
-    @keyframes drift-c {
+    @keyframes planet-bottom {
       0%, 100% { transform: translate(0, 0); }
-      45% { transform: translate(1px, 3px); }
-      80% { transform: translate(-2px, -1px); }
+      25% { transform: translate(6px, -4px); }
+      50% { transform: translate(0, -8px); }
+      75% { transform: translate(-6px, -4px); }
     }
 
-    @keyframes float-icon {
+    @keyframes planet-right {
       0%, 100% { transform: translate(0, 0); }
-      50% { transform: translate(0, -4px); }
+      25% { transform: translate(-6px, 5px); }
+      50% { transform: translate(-12px, 0); }
+      75% { transform: translate(-6px, -5px); }
+    }
+
+    @keyframes planet-upper-left {
+      0%, 100% { transform: translate(0, 0); }
+      25% { transform: translate(5px, 5px); }
+      50% { transform: translate(10px, 0); }
+      75% { transform: translate(5px, -4px); }
+    }
+
+    @keyframes label-orbit {
+      0%, 100% { transform: translate(0, 0); }
+      25% { transform: translate(3px, -2px); }
+      50% { transform: translate(5px, 1px); }
+      75% { transform: translate(2px, 3px); }
+    }
+
+    @keyframes satellite-left {
+      0%, 100% { transform: translate(0, 0); }
+      25% { transform: translate(5px, -5px); }
+      50% { transform: translate(10px, 0); }
+      75% { transform: translate(5px, 5px); }
+    }
+
+    @keyframes satellite-right {
+      0%, 100% { transform: translate(0, 0); }
+      25% { transform: translate(-5px, -5px); }
+      50% { transform: translate(-9px, 0); }
+      75% { transform: translate(-5px, 5px); }
+    }
+
+    @keyframes satellite-lower {
+      0%, 100% { transform: translate(0, 0); }
+      25% { transform: translate(5px, -4px); }
+      50% { transform: translate(0, -8px); }
+      75% { transform: translate(-5px, -4px); }
+    }
+
+    @keyframes copy-cycle {
+      0%, 100% { opacity: 0; }
+      5%, 25% { opacity: 1; }
+      30%, 95% { opacity: 0; }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -86,7 +141,8 @@
       .meera-core,
       .message-cluster,
       .orbit-icon,
-      .meera-label {
+      .meera-label,
+      .rotating-copy {
         animation: none !important;
       }
     }
@@ -135,6 +191,7 @@
   <rect fill="#FAF3E9" height="26" rx="13" width="133" x="15.5" y="221.58" />
   <rect height="25" rx="12.5" stroke="#0C3C26" stroke-opacity="0.08" width="132" x="16" y="222.08" />
   <text
+    class="rotating-copy copy-1"
     x="23.5"
     y="236.98"
     fill="#0C3C26"
@@ -144,6 +201,12 @@
   >
     ತುಂಬಾ ಖಿನ್ನತೆಯ ಭಾವನೆ 🥺
   </text>
+  <text class="rotating-copy copy-2" x="23.5" y="236.98" fill="#0C3C26" font-family="Inter, Arial, sans-serif" font-size="10" font-weight="400">
+    I don't feel okay today
+  </text>
+  <text class="rotating-copy copy-3" x="23.5" y="236.98" fill="#0C3C26" font-family="Inter, Arial, sans-serif" font-size="10" font-weight="400">
+    Can you listen to me?
+  </text>
   <ellipse cx="19.6854" cy="205.483" fill="#9BEBCE" rx="19.6854" ry="18.9385" />
   <ellipse cx="19.6854" cy="205.483" fill="url(#paint0_radial_1168_6278)" rx="19.6854" ry="18.9385" />
   <ellipse cx="19.6854" cy="205.483" fill="url(#paint1_radial_1168_6278)" rx="19.6854" ry="18.9385" />
@@ -152,8 +215,14 @@
   <path d="M228.647 37.5433L256.707 10.8906" stroke="#0C3C26" />
   <rect fill="#FAF3E9" height="26" rx="13" width="105" x="195.5" />
   <rect height="25" rx="12.5" stroke="#0C3C26" stroke-opacity="0.08" width="104" x="196" y="0.5" />
-  <text x="205.5" y="15.4" fill="#0C3C26" font-family="Inter, Arial, sans-serif" font-size="10" font-weight="400">
+  <text class="rotating-copy copy-1" x="205.5" y="15.4" fill="#0C3C26" font-family="Inter, Arial, sans-serif" font-size="10" font-weight="400">
     She cheated on me
+  </text>
+  <text class="rotating-copy copy-2" x="205.5" y="15.4" fill="#0C3C26" font-family="Inter, Arial, sans-serif" font-size="10" font-weight="400">
+    I feel so alone
+  </text>
+  <text class="rotating-copy copy-3" x="205.5" y="15.4" fill="#0C3C26" font-family="Inter, Arial, sans-serif" font-size="10" font-weight="400">
+    What do I do now?
   </text>
   <ellipse cx="228.041" cy="37.878" fill="#9BEBCE" rx="19.6854" ry="18.9385" />
   <ellipse cx="228.041" cy="37.878" fill="url(#paint2_radial_1168_6278)" rx="19.6854" ry="18.9385" />
@@ -169,8 +238,14 @@
   />
   <rect fill="#FAF3E9" height="26" rx="13" width="201" x="55" y="316.273" />
   <rect height="25" rx="12.5" stroke="#0C3C26" stroke-opacity="0.08" width="200" x="55.5" y="316.773" />
-  <text x="65" y="331.673" fill="#0C3C26" font-family="Inter, Arial, sans-serif" font-size="10" font-weight="400">
+  <text class="rotating-copy copy-1" x="65" y="331.673" fill="#0C3C26" font-family="Inter, Arial, sans-serif" font-size="10" font-weight="400">
     what's Christianity &amp; snake connection?
+  </text>
+  <text class="rotating-copy copy-2" x="65" y="331.673" fill="#0C3C26" font-family="Inter, Arial, sans-serif" font-size="10" font-weight="400">
+    Teach me something unexpected
+  </text>
+  <text class="rotating-copy copy-3" x="65" y="331.673" fill="#0C3C26" font-family="Inter, Arial, sans-serif" font-size="10" font-weight="400">
+    Why do dreams feel so real?
   </text>
   <ellipse cx="149.522" cy="296.175" fill="#89684D" rx="19.9223" ry="18.9385" />
   <ellipse cx="149.522" cy="296.175" fill="url(#paint4_radial_1168_6278)" rx="19.9223" ry="18.9385" />
@@ -186,8 +261,14 @@
   />
   <rect fill="#FAF3E9" height="26" rx="13" width="127" x="173.5" y="186.545" />
   <rect height="25" rx="12.5" stroke="#0C3C26" stroke-opacity="0.08" width="126" x="174" y="187.045" />
-  <text x="183.5" y="201.945" fill="#0C3C26" font-family="Inter, Arial, sans-serif" font-size="10" font-weight="400">
+  <text class="rotating-copy copy-1" x="183.5" y="201.945" fill="#0C3C26" font-family="Inter, Arial, sans-serif" font-size="10" font-weight="400">
     Anxiety is killing me 💔
+  </text>
+  <text class="rotating-copy copy-2" x="183.5" y="201.945" fill="#0C3C26" font-family="Inter, Arial, sans-serif" font-size="10" font-weight="400">
+    My mind won't slow down
+  </text>
+  <text class="rotating-copy copy-3" x="183.5" y="201.945" fill="#0C3C26" font-family="Inter, Arial, sans-serif" font-size="10" font-weight="400">
+    I need some clarity
   </text>
   <ellipse cx="285.084" cy="231.05" fill="#9BEBCE" rx="19.9019" ry="18.9385" />
   <ellipse cx="285.084" cy="231.05" fill="url(#paint6_radial_1168_6278)" rx="19.9019" ry="18.9385" />
@@ -206,8 +287,14 @@
   <ellipse cx="58.6754" cy="65.3375" fill="url(#paint9_radial_1168_6278)" rx="29.7633" ry="28.4078" />
   <rect fill="#FAF3E9" height="26" rx="13" width="137" x="13.5" y="18.9375" />
   <rect height="25" rx="12.5" stroke="#0C3C26" stroke-opacity="0.08" width="136" x="14" y="19.4375" />
-  <text x="23.5" y="34.3375" fill="#0C3C26" font-family="Inter, Arial, sans-serif" font-size="10" font-weight="400">
+  <text class="rotating-copy copy-1" x="23.5" y="34.3375" fill="#0C3C26" font-family="Inter, Arial, sans-serif" font-size="10" font-weight="400">
     Mujhe koi samjhta nahi 😔
+  </text>
+  <text class="rotating-copy copy-2" x="23.5" y="34.3375" fill="#0C3C26" font-family="Inter, Arial, sans-serif" font-size="10" font-weight="400">
+    Aaj mann heavy hai
+  </text>
+  <text class="rotating-copy copy-3" x="23.5" y="34.3375" fill="#0C3C26" font-family="Inter, Arial, sans-serif" font-size="10" font-weight="400">
+    Can we just talk?
   </text>
   </g>
   <line
