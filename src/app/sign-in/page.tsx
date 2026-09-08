@@ -286,7 +286,7 @@ function SignInClient() {
               <p className="mt-3 text-[11px] tracking-wide text-primary/38">Continue securely with Google</p>
             </div>
 
-            <div className="relative flex items-center justify-center">
+            <div className="relative -mx-4 flex items-center justify-center sm:mx-auto sm:w-full">
               <div className="pointer-events-none absolute inset-[18%] rounded-full bg-white/70 blur-3xl" />
               <Image
                 src="/images/home.svg?v=raw-meera-orb-v1"
@@ -296,7 +296,7 @@ function SignInClient() {
                 priority
                 unoptimized
                 sizes="(max-width: 1024px) 92vw, 54vw"
-                className="relative mx-auto h-auto w-full max-w-[520px] drop-shadow-[0_28px_50px_rgba(12,60,38,0.08)] sm:max-w-[590px] lg:w-[92%] lg:max-w-[580px] xl:w-full xl:max-w-[600px]"
+                className="relative mx-auto h-auto w-full max-w-[540px] drop-shadow-[0_28px_50px_rgba(12,60,38,0.08)] sm:max-w-[590px] lg:w-[92%] lg:max-w-[580px] xl:w-full xl:max-w-[600px]"
               />
             </div>
           </div>
