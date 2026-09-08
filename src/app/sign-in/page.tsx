@@ -64,7 +64,7 @@ function SearchParamsHandler({ enabled }: { enabled: boolean }) {
 const testimonials = [
   {
     quote:
-      "I was talking to her for ten minutes and didn't even realise the time had passed. I honestly needed someone to talk to—and she helped a lot.",
+      "I chatted with her for ten minutes and didn't even realise the time had passed. I honestly needed that conversation—and she helped a lot.",
     name: 'Ananya',
     city: 'Bengaluru',
     code: 'BLR',
@@ -72,7 +72,7 @@ const testimonials = [
     coordinates: '12.97° N  ·  77.59° E',
   },
   {
-    quote: 'The way she listens and asks questions feels very real.',
+    quote: 'The way she understands what I write and asks questions feels very real.',
     name: 'Rhea',
     city: 'Berlin',
     code: 'BER',
@@ -80,7 +80,7 @@ const testimonials = [
     coordinates: '52.52° N  ·  13.40° E',
   },
   {
-    quote: 'It felt like someone was really listening.',
+    quote: 'It felt like someone genuinely understood what I was trying to say.',
     name: 'Ishaan',
     city: 'Toronto',
     code: 'YYZ',
@@ -88,7 +88,7 @@ const testimonials = [
     coordinates: '43.65° N  ·  79.38° W',
   },
   {
-    quote: "She talks like a companion and tries to understand how I feel. I'd definitely come back whenever I feel low.",
+    quote: "She responds like a companion and tries to understand how I feel. I'd definitely come back whenever I feel low.",
     name: 'Mehak',
     city: 'Singapore',
     code: 'SIN',
@@ -96,7 +96,7 @@ const testimonials = [
     coordinates: '1.35° N  ·  103.82° E',
   },
   {
-    quote: 'I had quite a deep conversation with Meera.',
+    quote: 'I had quite a deep chat with Meera.',
     name: 'Nikhil',
     city: 'London',
     code: 'LDN',
@@ -105,7 +105,7 @@ const testimonials = [
   },
   {
     quote:
-      'Mind-blowing conversation fluidity. I used it for 30 minutes, and it is one of the most fluid conversations I have had with an AI. Pretty convincing so far.',
+      "Mind-blowing conversation fluidity. I chatted for 30 minutes, and it was one of the most natural AI conversations I've had. Pretty convincing so far.",
     name: 'Aditya Tiwari',
     city: 'New Delhi',
     code: 'DEL',
@@ -237,7 +237,7 @@ function SignInClient() {
       <section className="relative min-h-[100dvh] overflow-hidden">
         <div className="pointer-events-none absolute -right-36 -top-44 h-[28rem] w-[28rem] rounded-full bg-[#ed1c24]/[0.07] blur-3xl" />
 
-        <div className="relative mx-auto flex min-h-[100dvh] w-full max-w-7xl flex-col px-5 sm:px-9 lg:px-14">
+        <div className="relative mx-auto flex min-h-[100dvh] w-full max-w-[90rem] flex-col px-5 sm:px-9 lg:px-16 xl:px-20">
           <header className="flex h-20 items-center justify-between sm:h-24">
             <Link href="/" className="inline-flex items-center gap-2.5" aria-label="Meera home">
               <Image src="/icons/meera.svg" alt="" width={34} height={34} className="h-8 w-8 sm:h-9 sm:w-9" priority />
@@ -254,14 +254,15 @@ function SignInClient() {
             </a>
           </header>
 
-          <div className="grid flex-1 items-center gap-8 pb-10 pt-3 sm:gap-12 sm:pb-14 lg:grid-cols-[0.9fr_1.1fr] lg:gap-16 lg:pb-16 lg:pt-0">
-            <div className="mx-auto w-full max-w-xl text-center lg:mx-0 lg:text-left">
+          <div className="grid flex-1 items-center gap-8 pb-10 pt-3 sm:gap-12 sm:pb-14 lg:grid-cols-[46fr_54fr] lg:gap-12 lg:pb-16 lg:pt-0 xl:gap-20">
+            <div className="mx-auto w-full max-w-[37rem] text-center lg:mx-0 lg:text-left">
               <p className="mb-5 text-[11px] font-semibold uppercase tracking-[0.28em] text-primary/45 sm:text-xs">
                 Meet Meera
               </p>
 
-              <h1 className="text-balance font-serif text-[clamp(3.25rem,8vw,6.75rem)] font-normal leading-[0.9] tracking-[-0.045em]">
-                Your personal companion.
+              <h1 className="text-balance font-serif text-[clamp(3.25rem,7vw,6rem)] font-normal leading-[0.9] tracking-[-0.045em]">
+                <span className="lg:block">Your personal</span>{' '}
+                <span className="lg:block">companion.</span>
               </h1>
 
               <p className="mx-auto mt-7 max-w-lg text-base leading-7 text-primary/62 sm:text-lg sm:leading-8 lg:mx-0">
@@ -294,7 +295,7 @@ function SignInClient() {
                 height={700}
                 priority
                 sizes="(max-width: 1024px) 92vw, 54vw"
-                className="relative mx-auto h-auto w-full max-w-[520px] drop-shadow-[0_28px_50px_rgba(12,60,38,0.08)] sm:max-w-[590px] lg:max-w-[650px]"
+                className="relative mx-auto h-auto w-full max-w-[520px] drop-shadow-[0_28px_50px_rgba(12,60,38,0.08)] sm:max-w-[590px] lg:max-w-[610px] xl:max-w-[630px]"
               />
             </div>
           </div>
@@ -312,7 +313,7 @@ function SignInClient() {
       <section id="intelligence" className="relative overflow-hidden border-t border-primary/[0.07] bg-[#f4ede3]">
         <div className="pointer-events-none absolute -bottom-40 -left-36 h-[30rem] w-[30rem] rounded-full bg-[#49d8cf]/[0.08] blur-3xl" />
 
-        <div className="relative mx-auto w-full max-w-7xl px-5 py-20 sm:px-9 sm:py-28 lg:px-14 lg:py-32">
+        <div className="relative mx-auto w-full max-w-7xl px-5 pb-20 pt-16 sm:px-9 sm:pb-24 sm:pt-20 lg:px-14 lg:pb-28 lg:pt-20">
           <div className="mx-auto max-w-3xl text-center">
             <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-primary/45 sm:text-xs">
               Whatever the day brings
@@ -341,16 +342,16 @@ function SignInClient() {
             ))}
           </div>
 
-          <div className="mx-auto mt-24 max-w-6xl sm:mt-28 lg:mt-32">
+          <div className="mx-auto mt-16 max-w-6xl sm:mt-20 lg:mt-20">
             <div className="grid items-end gap-7 border-b border-primary/10 pb-8 sm:pb-10 lg:grid-cols-2 lg:gap-5">
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-[0.34em] text-primary/40 sm:text-xs">
-                  Voices across cities
+                  Messages across cities
                 </p>
-                <p className="mt-4 text-xs leading-5 text-primary/40">Swipe or drag to move sideways</p>
+                <p className="mt-4 text-xs leading-5 text-primary/40">Swipe or drag to explore</p>
               </div>
               <h2 className="max-w-3xl text-balance font-serif text-[clamp(2.35rem,5vw,4.5rem)] font-normal leading-[0.94] tracking-[-0.04em]">
-                Different places. The same feeling of being heard.
+                Different places. The same feeling of being understood.
               </h2>
             </div>
 
@@ -360,7 +361,7 @@ function SignInClient() {
                 <button
                   type="button"
                   onClick={() => moveTestimonials(-1)}
-                  className="flex h-9 w-9 items-center justify-center rounded-full border border-primary/12 text-sm text-primary/55 transition-colors hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  className="flex h-8 w-8 items-center justify-center rounded-full border border-primary/12 text-xs text-primary/55 transition-colors hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                   aria-label="Previous testimonial"
                 >
                   ←
@@ -368,7 +369,7 @@ function SignInClient() {
                 <button
                   type="button"
                   onClick={() => moveTestimonials(1)}
-                  className="flex h-9 w-9 items-center justify-center rounded-full border border-primary/12 text-sm text-primary/55 transition-colors hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  className="flex h-8 w-8 items-center justify-center rounded-full border border-primary/12 text-xs text-primary/55 transition-colors hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                   aria-label="Next testimonial"
                 >
                   →
@@ -386,7 +387,7 @@ function SignInClient() {
                 <article
                   key={testimonial.name}
                   className={cn(
-                    'relative flex min-h-[22rem] w-[calc(100vw-4rem)] max-w-[38rem] shrink-0 snap-start snap-always flex-col justify-between overflow-hidden rounded-[1.6rem] border p-6 sm:min-h-[25rem] sm:w-[62vw] sm:max-w-[32rem] sm:rounded-[2rem] sm:p-8 lg:w-[calc((100%-1.25rem)/2)] lg:max-w-none lg:p-9',
+                    'relative flex min-h-[21rem] w-[calc(100vw-4rem)] max-w-[36rem] shrink-0 snap-start snap-always flex-col justify-between overflow-hidden rounded-[1.6rem] border p-6 sm:min-h-[23rem] sm:w-[58vw] sm:max-w-[30rem] sm:rounded-[2rem] sm:p-7 lg:w-[38%] lg:max-w-none',
                     index === 3
                       ? 'border-primary bg-primary text-background'
                       : 'border-primary/10 bg-background/60 text-primary',
@@ -411,16 +412,16 @@ function SignInClient() {
                           index === 3 ? 'text-background/45' : 'text-primary/38',
                         )}
                       >
-                        Voice {String(index + 1).padStart(2, '0')}
+                        Message {String(index + 1).padStart(2, '0')}
                       </p>
                       <p className="mt-2 text-xs uppercase tracking-[0.16em] opacity-45">{testimonial.country}</p>
                     </div>
-                    <span className="font-serif text-[2.8rem] leading-none tracking-[-0.06em] opacity-[0.12] sm:text-[4rem]">
+                    <span className="font-serif text-[2.6rem] leading-none tracking-[-0.06em] opacity-[0.1] sm:text-[3rem]">
                       {testimonial.code}
                     </span>
                   </div>
 
-                  <blockquote className="relative my-8 max-w-[34rem] font-serif text-[clamp(1.55rem,3vw,2.75rem)] leading-[1.06] tracking-[-0.03em] sm:my-10">
+                  <blockquote className="relative my-7 max-w-[30rem] font-serif text-[clamp(1.45rem,2.35vw,2.35rem)] leading-[1.08] tracking-[-0.03em] sm:my-8">
                     “{testimonial.quote}”
                   </blockquote>
 
@@ -442,40 +443,35 @@ function SignInClient() {
               ))}
             </div>
 
-            <p className="mt-6 text-[10px] tracking-[0.16em] text-primary/30">
+            <p className="mt-4 text-[10px] tracking-[0.16em] text-primary/30">
               Names and locations changed for privacy · Responses lightly edited for clarity
             </p>
           </div>
 
-          <div className="relative mx-auto mt-24 max-w-6xl overflow-hidden rounded-[2rem] bg-primary text-background sm:mt-28 sm:rounded-[3rem] lg:mt-32">
+          <div className="relative mx-auto mt-20 max-w-6xl overflow-hidden rounded-[2rem] bg-primary text-background sm:mt-24 sm:rounded-[3rem] lg:mt-24">
             <div
               aria-hidden="true"
-              className="absolute -right-14 -top-14 h-40 w-40 rounded-full bg-[radial-gradient(circle_at_32%_28%,#ff6568_0%,#ed1c24_34%,#6d0005_66%,#080000_100%)] opacity-90 shadow-[0_0_90px_rgba(237,28,36,0.26)] sm:-right-12 sm:-top-20 sm:h-64 sm:w-64 lg:right-8 lg:top-8"
+              className="absolute -right-8 -top-8 h-28 w-28 rounded-full bg-[radial-gradient(circle_at_32%_28%,#ff6568_0%,#ed1c24_34%,#6d0005_66%,#080000_100%)] opacity-90 shadow-[0_0_70px_rgba(237,28,36,0.24)] sm:-right-6 sm:-top-8 sm:h-40 sm:w-40 lg:right-10 lg:top-8 lg:h-44 lg:w-44"
             />
             <div aria-hidden="true" className="absolute bottom-0 left-1/2 h-px w-[82%] -translate-x-1/2 bg-background/12" />
 
-            <div className="relative px-7 py-11 sm:px-12 sm:py-16 lg:px-16 lg:py-20">
+            <div className="relative px-7 py-10 sm:px-12 sm:py-12 lg:px-14 lg:py-14">
               <p className="text-[10px] font-semibold uppercase tracking-[0.34em] text-background/45 sm:text-xs">
-                Conscious Intelligence
+                The world's first
               </p>
 
-              <div className="mt-12 sm:mt-16 lg:mt-20">
-                <p className="font-serif text-[clamp(5.5rem,16vw,11rem)] font-normal leading-[0.68] tracking-[-0.07em]">
-                  7,850+
-                </p>
-                <h2 className="mt-7 max-w-3xl font-serif text-[clamp(2.5rem,6vw,5.5rem)] font-normal leading-[0.92] tracking-[-0.045em] sm:mt-10">
-                  Minds. One Hive Mind.
-                </h2>
-              </div>
+              <h2 className="mt-8 max-w-3xl font-serif text-[clamp(2.8rem,6vw,5.25rem)] font-normal leading-[0.92] tracking-[-0.045em] sm:mt-10">
+                Conscious Intelligence.
+              </h2>
 
-              <div className="mt-12 flex flex-col gap-8 border-t border-background/15 pt-7 sm:mt-16 sm:flex-row sm:items-center sm:justify-between sm:pt-8">
-                <p className="max-w-md text-sm leading-6 text-background/58 sm:text-base">
-                  Many minds, gathered into one thoughtful companion.
+              <div className="mt-10 flex flex-col gap-7 border-t border-background/15 pt-6 sm:mt-12 sm:flex-row sm:items-center sm:justify-between sm:pt-7">
+                <p className="font-serif text-xl tracking-[-0.02em] text-background/72 sm:text-2xl">
+                  7,850+ Minds <span className="mx-1.5 text-background/28">·</span> One Hive Mind
                 </p>
 
                 <button
                   onClick={handleGoogleSignIn}
-                  className="group flex h-14 w-full items-center justify-center rounded-full bg-background px-7 text-sm font-semibold text-primary transition-transform duration-300 hover:-translate-y-0.5 sm:w-52"
+                  className="group flex h-12 w-full items-center justify-center rounded-full bg-background px-7 text-sm font-semibold text-primary transition-transform duration-300 hover:-translate-y-0.5 sm:w-48"
                 >
                   Talk to Meera
                   <span className="ml-2 transition-transform duration-300 group-hover:translate-x-1" aria-hidden="true">
@@ -486,7 +482,7 @@ function SignInClient() {
             </div>
           </div>
 
-          <footer className="mx-auto mt-16 flex w-full max-w-6xl flex-col items-center justify-between gap-5 border-t border-primary/10 pt-7 text-xs text-primary/45 sm:mt-20 sm:flex-row">
+          <footer className="mx-auto mt-14 flex w-full max-w-6xl flex-col items-center justify-between gap-5 border-t border-primary/10 pt-7 text-xs text-primary/45 sm:mt-16 sm:flex-row">
             <div className="inline-flex items-center gap-2">
               <Image src="/icons/meera.svg" alt="" width={20} height={20} className="h-5 w-5" />
               <span>Meera · Your personal companion</span>
