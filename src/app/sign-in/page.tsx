@@ -289,7 +289,7 @@ function SignInClient() {
             <div className="relative flex items-center justify-center">
               <div className="pointer-events-none absolute inset-[18%] rounded-full bg-white/70 blur-3xl" />
               <Image
-                src="/images/home.svg?v=planetary-ec265dc"
+                src="/images/home.svg?v=conversational-orb-v1"
                 alt="People sharing thoughts, questions, and feelings with Meera"
                 width={636}
                 height={700}
