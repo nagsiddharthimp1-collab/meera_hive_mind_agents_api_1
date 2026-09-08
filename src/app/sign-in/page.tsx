@@ -295,7 +295,7 @@ function SignInClient() {
                 height={700}
                 priority
                 sizes="(max-width: 1024px) 92vw, 54vw"
-                className="relative mx-auto h-auto w-full max-w-[520px] drop-shadow-[0_28px_50px_rgba(12,60,38,0.08)] sm:max-w-[590px] lg:max-w-[610px] xl:max-w-[630px]"
+                className="relative mx-auto h-auto w-full max-w-[520px] drop-shadow-[0_28px_50px_rgba(12,60,38,0.08)] sm:max-w-[590px] lg:w-[92%] lg:max-w-[580px] xl:w-full xl:max-w-[600px]"
               />
             </div>
           </div>
