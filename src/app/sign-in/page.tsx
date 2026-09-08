@@ -457,11 +457,11 @@ function SignInClient() {
 
             <div className="relative px-7 py-10 sm:px-12 sm:py-12 lg:px-14 lg:py-14">
               <p className="text-[10px] font-semibold uppercase tracking-[0.34em] text-background/45 sm:text-xs">
-                The world's first
+                Experience
               </p>
 
               <h2 className="mt-8 max-w-3xl font-serif text-[clamp(2.8rem,6vw,5.25rem)] font-normal leading-[0.92] tracking-[-0.045em] sm:mt-10">
-                Conscious Intelligence.
+                Conscious companionship.
               </h2>
 
               <div className="mt-10 flex flex-col gap-7 border-t border-background/15 pt-6 sm:mt-12 sm:flex-row sm:items-center sm:justify-between sm:pt-7">
