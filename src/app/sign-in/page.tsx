@@ -23,7 +23,7 @@ import { cn } from '@/lib/utils';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { FcGoogle } from 'react-icons/fc';
 
 function SearchParamsHandler({ enabled }: { enabled: boolean }) {
@@ -67,26 +67,41 @@ const testimonials = [
       "I was talking to her for ten minutes and didn't even realise the time had passed. I honestly needed someone to talk to—and she helped a lot.",
     name: 'Ananya',
     city: 'Bengaluru',
+    code: 'BLR',
+    country: 'India',
+    coordinates: '12.97° N  ·  77.59° E',
   },
   {
     quote: 'The way she listens and asks questions feels very real.',
     name: 'Rhea',
-    city: 'Mysuru',
+    city: 'Berlin',
+    code: 'BER',
+    country: 'Germany',
+    coordinates: '52.52° N  ·  13.40° E',
   },
   {
     quote: 'It felt like someone was really listening.',
     name: 'Ishaan',
-    city: 'Indore',
+    city: 'Toronto',
+    code: 'YYZ',
+    country: 'Canada',
+    coordinates: '43.65° N  ·  79.38° W',
   },
   {
     quote: "She talks like a companion and tries to understand how I feel. I'd definitely come back whenever I feel low.",
     name: 'Mehak',
-    city: 'Jaipur',
+    city: 'Singapore',
+    code: 'SIN',
+    country: 'Singapore',
+    coordinates: '1.35° N  ·  103.82° E',
   },
   {
     quote: 'I had quite a deep conversation with Meera.',
     name: 'Nikhil',
-    city: 'Kochi',
+    city: 'London',
+    code: 'LDN',
+    country: 'United Kingdom',
+    coordinates: '51.51° N  ·  0.13° W',
   },
 ] as const;
 
@@ -94,6 +109,7 @@ function SignInClient() {
   const searchParams = useSearchParams();
   const referralId = searchParams.get('referral_id');
   const router = useRouter();
+  const testimonialRailRef = useRef<HTMLDivElement>(null);
   const [sessionStatus, setSessionStatus] = useState<SessionStatus>('loading');
   const [openInBrowserState, setOpenInBrowserState] = useState<{
     isOpen: boolean;
@@ -184,6 +200,16 @@ function SignInClient() {
     } catch (error) {
       console.error('Error signing in with Google:', error);
     }
+  };
+
+  const moveTestimonials = (direction: -1 | 1) => {
+    const rail = testimonialRailRef.current;
+    if (!rail) return;
+
+    rail.scrollBy({
+      left: direction * Math.min(rail.clientWidth * 0.84, 820),
+      behavior: 'smooth',
+    });
   };
 
   if (sessionStatus !== 'unauthenticated') {
@@ -304,86 +330,108 @@ function SignInClient() {
           </div>
 
           <div className="mx-auto mt-24 max-w-6xl sm:mt-32 lg:mt-40">
-            <div className="grid items-end gap-8 border-b border-primary/10 pb-10 sm:pb-12 lg:grid-cols-[0.8fr_1.2fr] lg:gap-16">
+            <div className="grid items-end gap-8 border-b border-primary/10 pb-10 sm:pb-12 lg:grid-cols-[0.72fr_1.28fr] lg:gap-16">
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-[0.34em] text-primary/40 sm:text-xs">
-                  In their own words
+                  Voices across cities
                 </p>
-                <p className="mt-4 text-xs leading-5 text-primary/40">Shared after a conversation with Meera</p>
+                <p className="mt-4 text-xs leading-5 text-primary/40">Swipe or drag to move sideways</p>
               </div>
               <h2 className="text-balance font-serif text-[clamp(2.8rem,6vw,5.6rem)] font-normal leading-[0.92] tracking-[-0.045em]">
-                Some conversations stay with you.
+                Different places. The same feeling of being heard.
               </h2>
             </div>
 
-            <div className="mt-5 grid gap-5 lg:grid-cols-[1.35fr_0.65fr]">
-              <article className="relative flex min-h-[26rem] flex-col justify-between overflow-hidden rounded-[2rem] border border-primary/10 bg-background/80 p-7 sm:min-h-[32rem] sm:rounded-[2.5rem] sm:p-12 lg:p-14">
-                <div
-                  aria-hidden="true"
-                  className="absolute -right-16 -top-16 h-52 w-52 rounded-full bg-[radial-gradient(circle_at_32%_28%,#ff6568_0%,#ed1c24_34%,#6d0005_66%,#080000_100%)] opacity-95 shadow-[0_0_100px_rgba(237,28,36,0.16)] sm:h-64 sm:w-64"
-                />
-                <span aria-hidden="true" className="relative font-serif text-7xl leading-none text-primary/15 sm:text-8xl">
-                  “
-                </span>
-                <blockquote className="relative max-w-3xl font-serif text-[clamp(2rem,4.2vw,4.2rem)] leading-[1.02] tracking-[-0.035em]">
-                  {testimonials[0].quote}
-                </blockquote>
-                <div className="relative mt-10 flex items-center gap-3 border-t border-primary/10 pt-6 text-xs uppercase tracking-[0.18em]">
-                  <span className="h-2 w-2 rounded-full bg-[#ed1c24]" aria-hidden="true" />
-                  <span>{testimonials[0].name}</span>
-                  <span className="text-primary/30">·</span>
-                  <span className="text-primary/45">{testimonials[0].city}</span>
-                </div>
-              </article>
-
-              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-1">
-                {testimonials.slice(1, 3).map((testimonial) => (
-                  <article
-                    key={testimonial.name}
-                    className="flex min-h-64 flex-col justify-between rounded-[2rem] border border-primary/10 bg-background/45 p-7 transition-colors duration-300 hover:bg-background/80 sm:p-8"
-                  >
-                    <blockquote className="font-serif text-[1.7rem] leading-[1.12] tracking-[-0.02em] sm:text-[2rem]">
-                      “{testimonial.quote}”
-                    </blockquote>
-                    <p className="mt-8 text-[10px] font-semibold uppercase tracking-[0.22em] text-primary/42">
-                      {testimonial.name} <span className="mx-1.5 text-primary/20">·</span> {testimonial.city}
-                    </p>
-                  </article>
-                ))}
+            <div className="mt-5 flex items-center justify-between gap-6">
+              <p className="text-[10px] uppercase tracking-[0.22em] text-primary/32">01 — 05</p>
+              <div className="flex gap-2" aria-label="Testimonial controls">
+                <button
+                  type="button"
+                  onClick={() => moveTestimonials(-1)}
+                  className="flex h-11 w-11 items-center justify-center rounded-full border border-primary/12 text-lg text-primary/55 transition-colors hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  aria-label="Previous testimonial"
+                >
+                  ←
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moveTestimonials(1)}
+                  className="flex h-11 w-11 items-center justify-center rounded-full border border-primary/12 text-lg text-primary/55 transition-colors hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  aria-label="Next testimonial"
+                >
+                  →
+                </button>
               </div>
             </div>
 
-            <div className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-5">
-              {testimonials.slice(3).map((testimonial, index) => (
+            <div
+              ref={testimonialRailRef}
+              className="hide-scrollbar -mx-5 mt-5 flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth px-5 pb-2 sm:-mx-9 sm:gap-5 sm:px-9 lg:mx-0 lg:px-0"
+              aria-label="What people say about Meera"
+              tabIndex={0}
+            >
+              {testimonials.map((testimonial, index) => (
                 <article
                   key={testimonial.name}
                   className={cn(
-                    'flex min-h-64 flex-col justify-between rounded-[2rem] border border-primary/10 p-7 sm:p-8',
-                    index === 0 ? 'bg-primary text-background lg:col-span-3' : 'bg-background/45 lg:col-span-2',
+                    'relative flex min-h-[28rem] w-[84vw] max-w-[47rem] shrink-0 snap-start snap-always flex-col justify-between overflow-hidden rounded-[2rem] border p-7 sm:min-h-[32rem] sm:w-[68vw] sm:rounded-[2.5rem] sm:p-10 lg:w-[56vw] lg:p-12',
+                    index === 3
+                      ? 'border-primary bg-primary text-background'
+                      : 'border-primary/10 bg-background/60 text-primary',
                   )}
                 >
-                  <blockquote
+                  <div
+                    aria-hidden="true"
                     className={cn(
-                      'font-serif leading-[1.08] tracking-[-0.025em]',
-                      index === 0 ? 'text-[2rem] sm:text-[2.5rem]' : 'text-[1.8rem] sm:text-[2.1rem]',
+                      'absolute inset-0 opacity-[0.045]',
+                      index === 3
+                        ? 'bg-[linear-gradient(rgba(255,255,255,0.75)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.75)_1px,transparent_1px)]'
+                        : 'bg-[linear-gradient(rgba(12,60,38,0.85)_1px,transparent_1px),linear-gradient(90deg,rgba(12,60,38,0.85)_1px,transparent_1px)]',
                     )}
-                  >
+                    style={{ backgroundSize: '36px 36px' }}
+                  />
+
+                  <div className="relative flex items-start justify-between gap-6">
+                    <div>
+                      <p
+                        className={cn(
+                          'text-[10px] font-semibold uppercase tracking-[0.28em]',
+                          index === 3 ? 'text-background/45' : 'text-primary/38',
+                        )}
+                      >
+                        Voice {String(index + 1).padStart(2, '0')}
+                      </p>
+                      <p className="mt-2 text-xs uppercase tracking-[0.16em] opacity-45">{testimonial.country}</p>
+                    </div>
+                    <span className="font-serif text-[3.7rem] leading-none tracking-[-0.06em] opacity-[0.13] sm:text-[5.5rem]">
+                      {testimonial.code}
+                    </span>
+                  </div>
+
+                  <blockquote className="relative my-12 max-w-[38rem] font-serif text-[clamp(2rem,4.2vw,4rem)] leading-[1.02] tracking-[-0.035em]">
                     “{testimonial.quote}”
                   </blockquote>
-                  <p
+
+                  <div
                     className={cn(
-                      'mt-8 text-[10px] font-semibold uppercase tracking-[0.22em]',
-                      index === 0 ? 'text-background/50' : 'text-primary/42',
+                      'relative flex flex-col gap-5 border-t pt-6 sm:flex-row sm:items-end sm:justify-between',
+                      index === 3 ? 'border-background/15' : 'border-primary/10',
                     )}
                   >
-                    {testimonial.name} <span className="mx-1.5 opacity-40">·</span> {testimonial.city}
-                  </p>
+                    <div className="flex items-center gap-3">
+                      <span className="h-2 w-2 rounded-full bg-[#ed1c24]" aria-hidden="true" />
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.22em]">
+                        {testimonial.name} <span className="mx-1.5 opacity-35">·</span> {testimonial.city}
+                      </p>
+                    </div>
+                    <p className="text-[9px] uppercase tracking-[0.18em] opacity-35">{testimonial.coordinates}</p>
+                  </div>
                 </article>
               ))}
             </div>
 
-            <p className="mt-6 text-center text-[10px] tracking-[0.16em] text-primary/30">
-              Names changed for privacy · Responses lightly edited for clarity
+            <p className="mt-6 text-[10px] tracking-[0.16em] text-primary/30">
+              Names and locations changed for privacy · Responses lightly edited for clarity
             </p>
           </div>
 
