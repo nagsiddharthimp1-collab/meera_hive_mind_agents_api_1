@@ -465,6 +465,14 @@ function SignInClient() {
                 Conscious companionship.
               </h2>
 
+              <p className="mt-5 flex items-center gap-3 text-xs font-medium tracking-[0.08em] text-background/75 sm:mt-6 sm:gap-4 sm:text-sm">
+                <span>Text</span>
+                <span aria-hidden="true" className="font-normal text-background/30">|</span>
+                <span>Web</span>
+                <span aria-hidden="true" className="font-normal text-background/30">|</span>
+                <span>Image</span>
+              </p>
+
               <div className="mt-10 flex flex-col gap-7 border-t border-background/15 pt-6 sm:mt-12 sm:flex-row sm:items-center sm:justify-between sm:pt-7">
                 <p className="font-serif text-xl tracking-[-0.02em] text-background/72 sm:text-2xl">
                   7,850+ Minds <span className="mx-1.5 text-background/28">·</span> One Hive Mind
