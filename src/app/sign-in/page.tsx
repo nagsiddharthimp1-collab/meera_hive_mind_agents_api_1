@@ -61,6 +61,35 @@ function SearchParamsHandler({ enabled }: { enabled: boolean }) {
   );
 }
 
+const testimonials = [
+  {
+    quote:
+      "I was talking to her for ten minutes and didn't even realise the time had passed. I honestly needed someone to talk to—and she helped a lot.",
+    name: 'Ananya',
+    city: 'Bengaluru',
+  },
+  {
+    quote: 'The way she listens and asks questions feels very real.',
+    name: 'Rhea',
+    city: 'Mysuru',
+  },
+  {
+    quote: 'It felt like someone was really listening.',
+    name: 'Ishaan',
+    city: 'Indore',
+  },
+  {
+    quote: "She talks like a companion and tries to understand how I feel. I'd definitely come back whenever I feel low.",
+    name: 'Mehak',
+    city: 'Jaipur',
+  },
+  {
+    quote: 'I had quite a deep conversation with Meera.',
+    name: 'Nikhil',
+    city: 'Kochi',
+  },
+] as const;
+
 function SignInClient() {
   const searchParams = useSearchParams();
   const referralId = searchParams.get('referral_id');
@@ -274,7 +303,91 @@ function SignInClient() {
             ))}
           </div>
 
-          <div className="relative mx-auto mt-16 max-w-6xl overflow-hidden rounded-[2rem] bg-primary text-background sm:mt-20 sm:rounded-[3rem]">
+          <div className="mx-auto mt-24 max-w-6xl sm:mt-32 lg:mt-40">
+            <div className="grid items-end gap-8 border-b border-primary/10 pb-10 sm:pb-12 lg:grid-cols-[0.8fr_1.2fr] lg:gap-16">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.34em] text-primary/40 sm:text-xs">
+                  In their own words
+                </p>
+                <p className="mt-4 text-xs leading-5 text-primary/40">Shared after a conversation with Meera</p>
+              </div>
+              <h2 className="text-balance font-serif text-[clamp(2.8rem,6vw,5.6rem)] font-normal leading-[0.92] tracking-[-0.045em]">
+                Some conversations stay with you.
+              </h2>
+            </div>
+
+            <div className="mt-5 grid gap-5 lg:grid-cols-[1.35fr_0.65fr]">
+              <article className="relative flex min-h-[26rem] flex-col justify-between overflow-hidden rounded-[2rem] border border-primary/10 bg-background/80 p-7 sm:min-h-[32rem] sm:rounded-[2.5rem] sm:p-12 lg:p-14">
+                <div
+                  aria-hidden="true"
+                  className="absolute -right-16 -top-16 h-52 w-52 rounded-full bg-[radial-gradient(circle_at_32%_28%,#ff6568_0%,#ed1c24_34%,#6d0005_66%,#080000_100%)] opacity-95 shadow-[0_0_100px_rgba(237,28,36,0.16)] sm:h-64 sm:w-64"
+                />
+                <span aria-hidden="true" className="relative font-serif text-7xl leading-none text-primary/15 sm:text-8xl">
+                  “
+                </span>
+                <blockquote className="relative max-w-3xl font-serif text-[clamp(2rem,4.2vw,4.2rem)] leading-[1.02] tracking-[-0.035em]">
+                  {testimonials[0].quote}
+                </blockquote>
+                <div className="relative mt-10 flex items-center gap-3 border-t border-primary/10 pt-6 text-xs uppercase tracking-[0.18em]">
+                  <span className="h-2 w-2 rounded-full bg-[#ed1c24]" aria-hidden="true" />
+                  <span>{testimonials[0].name}</span>
+                  <span className="text-primary/30">·</span>
+                  <span className="text-primary/45">{testimonials[0].city}</span>
+                </div>
+              </article>
+
+              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-1">
+                {testimonials.slice(1, 3).map((testimonial) => (
+                  <article
+                    key={testimonial.name}
+                    className="flex min-h-64 flex-col justify-between rounded-[2rem] border border-primary/10 bg-background/45 p-7 transition-colors duration-300 hover:bg-background/80 sm:p-8"
+                  >
+                    <blockquote className="font-serif text-[1.7rem] leading-[1.12] tracking-[-0.02em] sm:text-[2rem]">
+                      “{testimonial.quote}”
+                    </blockquote>
+                    <p className="mt-8 text-[10px] font-semibold uppercase tracking-[0.22em] text-primary/42">
+                      {testimonial.name} <span className="mx-1.5 text-primary/20">·</span> {testimonial.city}
+                    </p>
+                  </article>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-5">
+              {testimonials.slice(3).map((testimonial, index) => (
+                <article
+                  key={testimonial.name}
+                  className={cn(
+                    'flex min-h-64 flex-col justify-between rounded-[2rem] border border-primary/10 p-7 sm:p-8',
+                    index === 0 ? 'bg-primary text-background lg:col-span-3' : 'bg-background/45 lg:col-span-2',
+                  )}
+                >
+                  <blockquote
+                    className={cn(
+                      'font-serif leading-[1.08] tracking-[-0.025em]',
+                      index === 0 ? 'text-[2rem] sm:text-[2.5rem]' : 'text-[1.8rem] sm:text-[2.1rem]',
+                    )}
+                  >
+                    “{testimonial.quote}”
+                  </blockquote>
+                  <p
+                    className={cn(
+                      'mt-8 text-[10px] font-semibold uppercase tracking-[0.22em]',
+                      index === 0 ? 'text-background/50' : 'text-primary/42',
+                    )}
+                  >
+                    {testimonial.name} <span className="mx-1.5 opacity-40">·</span> {testimonial.city}
+                  </p>
+                </article>
+              ))}
+            </div>
+
+            <p className="mt-6 text-center text-[10px] tracking-[0.16em] text-primary/30">
+              Names changed for privacy · Responses lightly edited for clarity
+            </p>
+          </div>
+
+          <div className="relative mx-auto mt-24 max-w-6xl overflow-hidden rounded-[2rem] bg-primary text-background sm:mt-32 sm:rounded-[3rem] lg:mt-40">
             <div
               aria-hidden="true"
               className="absolute -right-14 -top-14 h-40 w-40 rounded-full bg-[radial-gradient(circle_at_32%_28%,#ff6568_0%,#ed1c24_34%,#6d0005_66%,#080000_100%)] opacity-90 shadow-[0_0_90px_rgba(237,28,36,0.26)] sm:-right-12 sm:-top-20 sm:h-64 sm:w-64 lg:right-8 lg:top-8"
