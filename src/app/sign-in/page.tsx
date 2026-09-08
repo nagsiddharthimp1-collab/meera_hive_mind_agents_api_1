@@ -289,11 +289,12 @@ function SignInClient() {
             <div className="relative flex items-center justify-center">
               <div className="pointer-events-none absolute inset-[18%] rounded-full bg-white/70 blur-3xl" />
               <Image
-                src="/images/home.svg"
+                src="/images/home.svg?v=planetary-ec265dc"
                 alt="People sharing thoughts, questions, and feelings with Meera"
                 width={636}
                 height={700}
                 priority
+                unoptimized
                 sizes="(max-width: 1024px) 92vw, 54vw"
                 className="relative mx-auto h-auto w-full max-w-[520px] drop-shadow-[0_28px_50px_rgba(12,60,38,0.08)] sm:max-w-[590px] lg:w-[92%] lg:max-w-[580px] xl:w-full xl:max-w-[600px]"
               />
