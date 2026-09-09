@@ -117,6 +117,7 @@ const testimonials = [
 function SignInClient() {
   const searchParams = useSearchParams();
   const referralId = searchParams.get('referral_id');
+  const hasGoogleAuthError = searchParams.get('auth_error') === 'google';
   const router = useRouter();
   const testimonialRailRef = useRef<HTMLDivElement>(null);
   const [sessionStatus, setSessionStatus] = useState<SessionStatus>('loading');
@@ -283,7 +284,15 @@ function SignInClient() {
                 </span>
               </button>
 
-              <p className="mt-3 text-[11px] tracking-wide text-primary/38">Continue securely with Google</p>
+              {hasGoogleAuthError && (
+                <p role="alert" className="mx-auto mt-3 max-w-sm text-sm text-[#a30d13] lg:mx-0">
+                  Google sign-in could not be completed. Please try again from this page.
+                </p>
+              )}
+
+              <p className={cn('text-[11px] tracking-wide text-primary/38', hasGoogleAuthError ? 'mt-2' : 'mt-3')}>
+                Continue securely with Google
+              </p>
             </div>
 
             <div className="relative -mx-4 flex items-center justify-center sm:mx-auto sm:w-full">
