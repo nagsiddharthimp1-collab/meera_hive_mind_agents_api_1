@@ -342,7 +342,7 @@ export const useMessageSubmission = ({
         };
       });
 
-      const optimisticId = optimisticIdToUpdate || `optimistic-${Date.now()}`;
+      const optimisticId = optimisticIdToUpdate || crypto.randomUUID();
       const isImageGenerationTurn = isLikelyImageTurnForLoadingStatus(
         trimmedMessage,
         attachmentsWithStorage,
@@ -353,7 +353,7 @@ export const useMessageSubmission = ({
       if (!optimisticIdToUpdate) {
         const userMessage = createOptimisticMessage(optimisticId, trimmedMessage, attachmentsWithStorage);
 
-        const assistantMessageId = `assistant-${Date.now()}`;
+        const assistantMessageId = crypto.randomUUID();
         const emptyAssistantMessage: ChatMessageFromServer = {
           message_id: assistantMessageId,
           content: '',
@@ -410,17 +410,36 @@ export const useMessageSubmission = ({
         await chatService.streamMessage({
           message: trimmedMessage,
           attachments: outgoingAttachments,
+          providedUserMessageId: optimisticIdToUpdate ? undefined : optimisticId,
+          providedAssistantMessageId: optimisticIdToUpdate ? undefined : assistantId || undefined,
           onMeta: (meta) => {
-            const messageType = String(meta?.messageType || '').trim().toLowerCase();
-            if (!messageType) return;
+            const messageType = String(meta?.messageType || '')
+              .trim()
+              .toLowerCase();
+            const conversationClass = String(meta?.conversationClass || '')
+              .trim()
+              .toLowerCase();
+            const statusLabel =
+              typeof meta?.statusLabel === 'string' ? meta.statusLabel.replace(/\s+/g, ' ').trim().slice(0, 96) : '';
+
             setChatMessages((prev) =>
               prev.map((msg) =>
-                msg.message_id === optimisticId
+                messageType && msg.message_id === optimisticId
                   ? {
                       ...msg,
                       message_type: messageType,
                     }
-                  : msg,
+                  : assistantId && msg.message_id === assistantId
+                    ? {
+                        ...msg,
+                        conversationClass: conversationClass || msg.conversationClass,
+                        agenticActive: meta?.agenticActive ?? msg.agenticActive,
+                        agentTaskId: meta?.taskId ?? msg.agentTaskId,
+                        webSearchEnabled: meta?.webSearchEnabled ?? msg.webSearchEnabled,
+                        workStatusLabel:
+                          statusLabel || (meta?.webSearchEnabled === true ? 'Searching the web' : msg.workStatusLabel),
+                      }
+                    : msg,
               ),
             );
           },
@@ -453,7 +472,7 @@ export const useMessageSubmission = ({
                           finalMsgContent ||
                           msg.content ||
                           fullAssistantText ||
-                          'Sorry, I could not generate a response. Please try again.',
+                          (msg.agentTaskId ? '' : 'Sorry, I could not generate a response. Please try again.'),
                         failed: false,
                         isGeneratingImage: false,
                         try_number: tryNumber,
@@ -522,6 +541,7 @@ export const useMessageSubmission = ({
     },
     [
       isSending,
+      chatMessages,
       createOptimisticMessage,
       setChatMessages,
       clearAllInput,

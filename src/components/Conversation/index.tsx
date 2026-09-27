@@ -305,6 +305,10 @@ const MemoizedRenderedMessageItem = React.memo(RenderedMessageItem, (prevProps, 
   return (
     prevProps.message.message_id === nextProps.message.message_id &&
     prevProps.message.content === nextProps.message.content &&
+    prevProps.message.agentTaskId === nextProps.message.agentTaskId &&
+    prevProps.message.agenticActive === nextProps.message.agenticActive &&
+    prevProps.message.workStatusLabel === nextProps.message.workStatusLabel &&
+    prevProps.message.conversationClass === nextProps.message.conversationClass &&
     prevProps.isStreaming === nextProps.isStreaming &&
     prevProps.isStarred === nextProps.isStarred &&
     prevProps.isLastFailedMessage === nextProps.isLastFailedMessage &&
@@ -1566,6 +1570,25 @@ export const Conversation: React.FC = () => {
       initialLoadDone.current = true;
     }
   }, [loadChatHistory]);
+
+  // A refresh can land between the assistant placeholder insert and task creation.
+  // Reconcile that short gap so a running agent reconnects to its in-bubble
+  // status watcher and the eventual answer appears without another refresh.
+  const hasUnlinkedAssistant = chatMessages.some((msg) =>
+    msg.content_type === 'assistant' && !msg.content && !msg.agentTaskId &&
+    Date.now() - Date.parse(msg.timestamp) < 5 * 60_000,
+  );
+  useEffect(() => {
+    if (process.env.NEXT_PUBLIC_AGENTIC_TEXT_ENABLED !== 'true' || !supabaseUserId || !hasUnlinkedAssistant) return;
+    let active = true;
+    const reconcile = async () => {
+      const response = await chatService.getChatHistory(1);
+      if (active && response.message === 'ok') mergeMessagesIntoState(response.data as ChatMessageFromServer[]);
+    };
+    const timer = window.setInterval(() => void reconcile(), 1800);
+    void reconcile();
+    return () => { active = false; window.clearInterval(timer); };
+  }, [hasUnlinkedAssistant, mergeMessagesIntoState, supabaseUserId]);
 
   useEffect(() => {
     let isMounted = true;

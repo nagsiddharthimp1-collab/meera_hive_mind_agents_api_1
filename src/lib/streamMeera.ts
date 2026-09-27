@@ -58,6 +58,9 @@ type GeminiSseChunk = {
   messageType?: string;
   conversationClass?: string;
   model?: string;
+  statusEligible?: boolean;
+  statusPhase?: string;
+  statusLabel?: string;
 
   // Gemini SSE payload
   candidates?: GeminiCandidate[];
@@ -178,6 +181,9 @@ export async function streamMeera({
         messageType?: string;
         conversationClass?: string;
         model?: string;
+        statusEligible?: boolean;
+        statusPhase?: string;
+        statusLabel?: string;
         images?: ChatResponseImage[];
         attachments?: ChatResponseAttachment[];
       };
@@ -191,6 +197,9 @@ export async function streamMeera({
           messageType: json.messageType,
           conversationClass: json.conversationClass,
           model: json.model,
+          statusEligible: json.statusEligible,
+          statusPhase: json.statusPhase,
+          statusLabel: json.statusLabel,
         });
       }
       const reply = String(json?.reply || '').trim();

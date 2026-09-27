@@ -1,9 +1,10 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
+  distDir: process.env.MEERA_BUILD_DIR || '.next',
   eslint: {
     // Temporary production safeguard: local lint still runs via npm scripts.
-    // Build-time lint fails on Vercel due transitive react-scripts eslint peer mismatch.
+    // Keep lint as a separate check while existing lint issues are resolved.
     ignoreDuringBuilds: true,
   },
   env: {

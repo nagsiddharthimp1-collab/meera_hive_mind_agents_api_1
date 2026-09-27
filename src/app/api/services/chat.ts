@@ -1,9 +1,10 @@
 // src/app/api/services/chat.ts
+import { streamMeera } from '@/lib/streamMeera';
+import { isAgentCandidate, requestAgentRoute, waitForAgent } from '@/lib/agenticRoute';
+import { supabase } from '@/lib/supabaseClient';
 import { SaveInteractionPayload } from '@/types/chat';
 import { api } from '../client';
 import { API_ENDPOINTS } from '../config';
-import { supabase } from '@/lib/supabaseClient';
-import { streamMeera } from '@/lib/streamMeera';
 
 /* ---------- Errors ---------- */
 
@@ -115,6 +116,9 @@ type MeeraImageResponse = {
   webSearchTriggerReason?: string;
   messageType?: string;
   conversationClass?: string;
+  statusEligible?: boolean;
+  statusPhase?: string;
+  statusLabel?: string;
   reply?: string;
   thoughts?: string;
   images?: { mimeType?: string; data: string; dataUrl?: string }[];
@@ -204,14 +208,19 @@ function persistClientSessionId(userId: string, sessionId?: string | null): stri
 
 /* ---------- Image helpers ---------- */
 
-const IMAGE_TRIGGER_WORDS = ['image', 'photo', 'picture', 'img', 'pic'];
+const IMAGE_TRIGGER_WORDS = [
+  'image',
+  'photo',
+  'picture',
+  'img',
+  'pic',
+];
 const IMAGE_FILE_EXT_RE = /\.(png|jpe?g|webp|gif|bmp|avif|heic|heif)(\?|#|$)/i;
 
 function isImagePrompt(text: string): boolean {
   const t = text.toLowerCase();
   const hasImageNoun = IMAGE_TRIGGER_WORDS.some((w) => t.includes(w));
-  const hasGenerateVerb =
-    /\b(generate|create|draw|make|render|illustrate|paint|sketch|design)\b/.test(t);
+  const hasGenerateVerb = /\b(generate|create|draw|make|render|illustrate|paint|sketch|design)\b/.test(t);
   const hasShowOrSendImage = /\b(show|send|give)\b.*\b(image|picture|photo|pic)\b/.test(t);
   return hasShowOrSendImage || (hasGenerateVerb && hasImageNoun);
 }
@@ -239,13 +248,15 @@ function isLikelyImageEditPrompt(text: string): boolean {
     );
   if (hasEditVerb && hasTarget) return true;
   if (/\b(change|set)\b.*\b(background|bg)\b.*\b(colou?r)\b/.test(t)) return true;
-  if (/\b(make|turn|set)\b.*\b(red|green|blue|black|white|gray|grey|purple|pink|orange|yellow|brown|teal|navy|beige|cream)\b/.test(t)) {
+  if (
+    /\b(make|turn|set)\b.*\b(red|green|blue|black|white|gray|grey|purple|pink|orange|yellow|brown|teal|navy|beige|cream)\b/.test(
+      t,
+    )
+  ) {
     return true;
   }
-  const hasStyleCue =
-    /\b(look|style|vibe|theme|aesthetic|avatar|character|costume|outfit|filter)\b/.test(t);
-  const hasSubjectRef =
-    /\b(him|her|them|me|my|our|it|this|that|face|selfie|portrait)\b/.test(t);
+  const hasStyleCue = /\b(look|style|vibe|theme|aesthetic|avatar|character|costume|outfit|filter)\b/.test(t);
+  const hasSubjectRef = /\b(him|her|them|me|my|our|it|this|that|face|selfie|portrait)\b/.test(t);
   if (/\b(give|make|turn|transform|restyle|convert|style)\b/.test(t) && hasStyleCue && hasSubjectRef) return true;
   if (/\b(make|turn)\b.*\binto\b/.test(t) && hasSubjectRef) return true;
   return false;
@@ -258,8 +269,7 @@ function isLikelyAttachmentEditCue(text: string): boolean {
       t,
     );
   const hasImageRef = /\b(image|photo|picture|pic|portrait|selfie)\b/.test(t);
-  const hasStyleCue =
-    /\b(look|style|vibe|theme|aesthetic|avatar|character|costume|outfit|filter)\b/.test(t);
+  const hasStyleCue = /\b(look|style|vibe|theme|aesthetic|avatar|character|costume|outfit|filter)\b/.test(t);
   const hasSubjectRef = /\b(him|her|them|me|my|our|it|this|that|face)\b/.test(t);
   return hasTransformVerb && (hasImageRef || hasStyleCue || hasSubjectRef);
 }
@@ -278,12 +288,8 @@ function isLikelyAttachmentTextRewriteCue(text: string): boolean {
       t,
     );
   const hasRewriteCue =
-    /\b(rewrite|rephrase|revise|polish|tighten|shorten|draft|write|compose|fix|edit|improve|clean)\b/.test(
-      t,
-    ) ||
-    /\b(crisp|crisper|concise|shorter|clearer|cleaner|better|professional|punchier)\b/.test(
-      t,
-    ) ||
+    /\b(rewrite|rephrase|revise|polish|tighten|shorten|draft|write|compose|fix|edit|improve|clean)\b/.test(t) ||
+    /\b(crisp|crisper|concise|shorter|clearer|cleaner|better|professional|punchier)\b/.test(t) ||
     /\b(make|make it|make this)\b.*\b(crisp|crisper|concise|shorter|clearer|cleaner|better|professional|punchier)\b/.test(
       t,
     );
@@ -296,7 +302,9 @@ function isLikelyAttachmentAdviceCue(text: string): boolean {
     /\b(tell me what to do|what should i|what can i|how can i|how do i|how should i)\b/.test(t) ||
     /\b(suggest|recommend|advise|advice|feedback|critique|review)\b/.test(t) ||
     /\b(what|how)\b.*\b(change|improve|fix|clean|polish|adjust|tweak|make better)\b/.test(t) ||
-    /\b(make|making)\b.*\b(clean|cleaner|better|polished|professional)\b.*\b(suggest|recommend|advice|what to do)\b/.test(t)
+    /\b(make|making)\b.*\b(clean|cleaner|better|polished|professional)\b.*\b(suggest|recommend|advice|what to do)\b/.test(
+      t,
+    )
   );
 }
 
@@ -447,6 +455,21 @@ export const chatService = {
 
       const rows = ((data ?? []) as DbMessageRow[]).slice().reverse();
       const mapped = rows.map(mapDbRowToChatMessage);
+      if (process.env.NEXT_PUBLIC_AGENTIC_TEXT_ENABLED === 'true') {
+        const assistantIds = rows.filter((row) => row.content_type === 'assistant').map((row) => row.message_id);
+        if (assistantIds.length) {
+          const { data: tasks } = await supabase.from('agent_tasks')
+            .select('id,assistant_message_id,status,current_step')
+            .eq('user_id', userId).in('assistant_message_id', assistantIds);
+          const byId = new Map((tasks ?? []).map((task) => [task.assistant_message_id, task]));
+          for (const item of mapped) {
+            const task = byId.get(item.message_id);
+            if (task) {
+              Object.assign(item, { agenticActive: true, agentTaskId: task.id, workStatusLabel: task.current_step || 'Working' });
+            }
+          }
+        }
+      }
 
       return { message: 'ok', data: mapped };
     } catch (e) {
@@ -505,7 +528,9 @@ export const chatService = {
 
       const { data, error } = await supabase
         .from('messages')
-        .select('message_id, content_type, content, timestamp, session_id, is_call, message_type, attachments, image_url')
+        .select(
+          'message_id, content_type, content, timestamp, session_id, is_call, message_type, attachments, image_url',
+        )
         .eq('user_id', userId)
         .eq('content_type', 'assistant')
         .or('image_url.not.is.null,attachments.not.is.null')
@@ -552,12 +577,7 @@ export const chatService = {
     }
   },
 
-  async getMessageContextWindow(
-    messageId: string,
-    before: number = 24,
-    after: number = 24,
-    aroundTimestamp?: string,
-  ) {
+  async getMessageContextWindow(messageId: string, before: number = 24, after: number = 24, aroundTimestamp?: string) {
     try {
       const messageColumns =
         'message_id, user_id, content_type, content, timestamp, session_id, is_call, model, message_type, image_url, attachments';
@@ -623,9 +643,7 @@ export const chatService = {
         };
 
         const anchorSessionId =
-          typeof anchorRow?.session_id === 'string' && anchorRow.session_id.trim()
-            ? anchorRow.session_id
-            : undefined;
+          typeof anchorRow?.session_id === 'string' && anchorRow.session_id.trim() ? anchorRow.session_id : undefined;
 
         const inSessionResult = await queryPreviousUser(anchorSessionId);
         if (inSessionResult.error) {
@@ -738,11 +756,7 @@ export const chatService = {
     }
   },
 
-  async setMessageStar(
-    messageId: string,
-    shouldStar: boolean,
-    snapshot?: StarredMessageSnapshotInput,
-  ) {
+  async setMessageStar(messageId: string, shouldStar: boolean, snapshot?: StarredMessageSnapshotInput) {
     try {
       const normalizedMessageId = messageId.trim();
       if (!normalizedMessageId) return { message: 'error' };
@@ -759,7 +773,9 @@ export const chatService = {
           content: typeof snapshot?.content === 'string' ? snapshot.content : '',
           content_type: snapshot?.content_type === 'user' ? 'user' : 'assistant',
           timestamp:
-            typeof snapshot?.timestamp === 'string' && snapshot.timestamp ? snapshot.timestamp : new Date().toISOString(),
+            typeof snapshot?.timestamp === 'string' && snapshot.timestamp
+              ? snapshot.timestamp
+              : new Date().toISOString(),
           user_context:
             typeof snapshot?.user_context === 'string' ? snapshot.user_context.replace(/\s+/g, ' ').trim() : '',
           summary:
@@ -818,6 +834,8 @@ export const chatService = {
     message,
     attachments = [],
     sessionId,
+    providedUserMessageId,
+    providedAssistantMessageId,
     onDelta,
     onDone,
     onError,
@@ -827,6 +845,8 @@ export const chatService = {
     message: string;
     attachments?: OutgoingAttachment[];
     sessionId?: string;
+    providedUserMessageId?: string;
+    providedAssistantMessageId?: string;
     onDelta: (delta: string) => void;
     onDone?: (finalMsg: AssistantMsg) => void;
     onError?: (err: unknown) => void;
@@ -836,6 +856,11 @@ export const chatService = {
       model?: string;
       webSearchEnabled?: boolean;
       webSearchTriggerReason?: string;
+      statusEligible?: boolean;
+      statusPhase?: string;
+      statusLabel?: string;
+      agenticActive?: boolean;
+      taskId?: string;
     }) => void;
     signal?: AbortSignal;
   }) {
@@ -850,8 +875,8 @@ export const chatService = {
       const effectiveSessionId = getOrCreateClientSessionId(userId, sessionId);
 
       // Deterministic IDs for this interaction (fixes system_prompt + attachment updates)
-      const userMessageId = crypto.randomUUID();
-      const assistantMessageId = crypto.randomUUID();
+      const userMessageId = providedUserMessageId || crypto.randomUUID();
+      const assistantMessageId = providedAssistantMessageId || crypto.randomUUID();
 
       /* ---------- Fetch context history ---------- */
       let historyRows: DbMessageRow[] = [];
@@ -890,8 +915,7 @@ export const chatService = {
       const hasLikelyImageEditIntent = isLikelyImageEditPrompt(message);
       const hasAttachmentEditCue = isLikelyAttachmentEditCue(message);
       const hasAttachmentReadCue = isLikelyAttachmentReadCue(message);
-      const hasAttachmentTextRewriteCue =
-        hasIncomingImageAttachment && isLikelyAttachmentTextRewriteCue(message);
+      const hasAttachmentTextRewriteCue = hasIncomingImageAttachment && isLikelyAttachmentTextRewriteCue(message);
       const hasAttachmentAdviceCue = isLikelyAttachmentAdviceCue(message);
       const hasPreviousAssistantImage = hasAssistantImageMessage(sortedHistory);
       const hasPreviousImageEditIntent =
@@ -904,11 +928,11 @@ export const chatService = {
         !hasAttachmentTextRewriteCue &&
         !hasAttachmentAdviceCue &&
         (hasLikelyImageGenerateIntent ||
-        hasPreviousImageEditIntent ||
-        (hasIncomingImageAttachment &&
-          (hasLikelyImageEditIntent || hasAttachmentEditCue) &&
-          !hasAttachmentReadCue &&
-          !hasAttachmentTextRewriteCue));
+          hasPreviousImageEditIntent ||
+          (hasIncomingImageAttachment &&
+            (hasLikelyImageEditIntent || hasAttachmentEditCue) &&
+            !hasAttachmentReadCue &&
+            !hasAttachmentTextRewriteCue));
 
       /* ---------- Save user message WITH message_id ---------- */
       await supabase.from('messages').insert([
@@ -1031,6 +1055,46 @@ export const chatService = {
       /*                                 TEXT MODE                              */
       /* ---------------------------------------------------------------------- */
 
+      let agentCandidate = isAgentCandidate(message);
+      if (process.env.NEXT_PUBLIC_AGENTIC_TEXT_ENABLED === 'true' && !agentCandidate && !normalizedAttachments.length && message.length <= 240) {
+        const { data: pendingQuestion } = await supabase.from('agent_tasks').select('id')
+          .eq('user_id', userId).eq('session_id', effectiveSessionId)
+          .eq('status', 'partial').eq('error_code', 'needs_input')
+          .gte('created_at', new Date(Date.now() - 24 * 60 * 60_000).toISOString())
+          .order('created_at', { ascending: false }).limit(1).maybeSingle();
+        agentCandidate = Boolean(pendingQuestion);
+      }
+      if (process.env.NEXT_PUBLIC_AGENTIC_TEXT_ENABLED === 'true' && !normalizedAttachments.length && agentCandidate) {
+        const route = await requestAgentRoute({
+          supabaseUrl: SUPABASE_URL!, anonKey: SUPABASE_ANON_KEY!, accessToken,
+          message, sessionId: effectiveSessionId, userMessageId, assistantMessageId, signal,
+        });
+        if (route.executionMode === 'agentic' && route.taskId) {
+          onMeta?.({ conversationClass: route.conversationClass, agenticActive: true, taskId: route.taskId, statusLabel: 'Planning the steps', model: 'deepseek/deepseek-v4-flash-0731' });
+          const result = await waitForAgent({
+            supabaseUrl: SUPABASE_URL!, anonKey: SUPABASE_ANON_KEY!, accessToken,
+            taskId: route.taskId, signal,
+            onStatus: (status) => onMeta?.({
+              conversationClass: route.conversationClass,
+              agenticActive: true,
+              taskId: route.taskId,
+              statusLabel: status.current_step || (status.status === 'queued' ? 'Starting' : 'Working'),
+            }),
+          });
+          const pending = ['queued', 'running'].includes(result.status);
+          const content = pending ? '' : String(result.result_text || '').trim() || 'I could not finish this task. Please try again.';
+          // Keep the assistant message empty while the task is running so its
+          // in-bubble task watcher can show Stop and replace progress on finish.
+          if (content) onDelta(content);
+          onDone?.({
+            message_id: assistantMessageId, content_type: 'assistant', content,
+            timestamp: new Date().toISOString(), attachments: [], is_call: false,
+            failed: false, finish_reason: null,
+          });
+          return;
+        }
+      }
+
       let finalText = '';
       let streamError: unknown = null;
       let streamResponseAttachments: ImageAttachment[] = [];
@@ -1095,9 +1159,7 @@ export const chatService = {
 
         if (!fallbackRes.ok) {
           const rawError = await fallbackRes.text();
-          const fallbackError = new Error(
-            rawError || `Chat fallback failed: ${fallbackRes.status}`,
-          );
+          const fallbackError = new Error(rawError || `Chat fallback failed: ${fallbackRes.status}`);
           (fallbackError as Error & { status?: number }).status = fallbackRes.status;
           throw fallbackError;
         }
@@ -1110,6 +1172,9 @@ export const chatService = {
           model: fallbackJson.model,
           webSearchEnabled: fallbackJson.webSearchEnabled,
           webSearchTriggerReason: fallbackJson.webSearchTriggerReason,
+          statusEligible: fallbackJson.statusEligible,
+          statusPhase: fallbackJson.statusPhase,
+          statusLabel: fallbackJson.statusLabel,
         });
         streamResponseAttachments = buildImageAttachmentsFromResponse(fallbackJson);
         const fallbackReplyRaw = String(fallbackJson?.reply || '').trim();
@@ -1154,7 +1219,15 @@ export const chatService = {
 
       // Backend is the single writer for final assistant content.
       // Poll briefly so we don't race and overwrite finalized backend replies with partial deltas.
-      const readDelaysMs = [0, 120, 250, 500, 900, 1400, 2200];
+      const readDelaysMs = [
+        0,
+        120,
+        250,
+        500,
+        900,
+        1400,
+        2200,
+      ];
       for (const delayMs of readDelaysMs) {
         if (delayMs > 0) {
           await new Promise((resolve) => setTimeout(resolve, delayMs));
@@ -1162,7 +1235,11 @@ export const chatService = {
         const candidate = await readAssistantRow();
         if (!candidate) continue;
         row = candidate;
-        if (typeof candidate.content === 'string' && candidate.content.trim() && !isForbiddenAssistantReply(candidate.content)) {
+        if (
+          typeof candidate.content === 'string' &&
+          candidate.content.trim() &&
+          !isForbiddenAssistantReply(candidate.content)
+        ) {
           resolvedFinalText = candidate.content.trim();
           break;
         }
@@ -1173,8 +1250,7 @@ export const chatService = {
       }
 
       const rowContent = typeof row?.content === 'string' ? row.content.trim() : '';
-      const finalContent =
-        rowContent && !isForbiddenAssistantReply(rowContent) ? rowContent : resolvedFinalText;
+      const finalContent = rowContent && !isForbiddenAssistantReply(rowContent) ? rowContent : resolvedFinalText;
       const rowAttachments = (row?.attachments as ImageAttachment[] | null) ?? [];
 
       const assistantMsg: AssistantMsg = {

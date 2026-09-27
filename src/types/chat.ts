@@ -78,6 +78,11 @@ export interface ChatMessageFromServer {
   try_number?: number;
   failedMessage?: string;
   isGeneratingImage?: boolean;
+  conversationClass?: string;
+  webSearchEnabled?: boolean;
+  workStatusLabel?: string;
+  agenticActive?: boolean;
+  agentTaskId?: string;
 
   // keep raw generated images (used by UI only, never sent back to model)
   generatedImages?: GeneratedImage[];

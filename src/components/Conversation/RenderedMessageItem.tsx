@@ -29,6 +29,8 @@ import {
 import { ImageModal } from '@/components/ui/ImageModal';
 import { formatTime } from '@/lib/dateUtils';
 import { normalizeAssistantMarkdownContent } from '@/lib/markdownText';
+import { startGoogleAgentConnection } from '@/lib/auth/startGoogleAgentConnection';
+import { supabase } from '@/lib/supabaseClient';
 import { truncateFileName } from '@/lib/stringUtils';
 import { ChatMessageFromServer, GeneratedImage } from '@/types/chat';
 import Image from 'next/image';
@@ -56,6 +58,177 @@ type ThinkingStatusTextProps = {
   phase: ThinkingPhase;
   thoughtText?: string;
   isImageGeneration?: boolean;
+};
+
+const isWorkConversation = (conversationClass?: string) =>
+  /^work(?:$|[-_\s])/.test(
+    String(conversationClass || '')
+      .trim()
+      .toLowerCase(),
+  );
+
+const WorkStatusPanel: React.FC<{ statusLabel?: string }> = ({ statusLabel }) => {
+  const normalizedStatus = String(statusLabel || '').trim();
+  const isGenericStatus = /^(orchestrating|searching memories|thinking)$/i.test(normalizedStatus);
+  const nextThinkingLabel = normalizedStatus && !isGenericStatus ? normalizedStatus : 'Thinking';
+  const [thinkingLabel, setThinkingLabel] = useState('Thinking');
+  const hasShownLiveStatus = useRef(false);
+
+  useEffect(() => {
+    if (nextThinkingLabel === 'Thinking') {
+      setThinkingLabel('Thinking');
+      return;
+    }
+
+    // Let the initial three-step frame be visible before the final line starts
+    // describing the live work. Later status changes can update quickly.
+    const timeout = window.setTimeout(
+      () => {
+        setThinkingLabel(nextThinkingLabel);
+        hasShownLiveStatus.current = true;
+      },
+      hasShownLiveStatus.current ? 150 : 900,
+    );
+
+    return () => window.clearTimeout(timeout);
+  }, [nextThinkingLabel]);
+
+  return (
+    <div className="w-full max-w-sm text-primary" role="status" aria-live="polite">
+      <p className="mb-2 text-[15px] font-medium">Working</p>
+      <div className="space-y-1.5 text-[14px] text-primary/75">
+        {[
+          'Orchestrating',
+          'Searching memories',
+          thinkingLabel,
+        ].map((label, index) => (
+          <div key={label} className="flex items-center gap-2">
+            <span
+              className={`h-2.5 w-2.5 shrink-0 rounded-full ${
+                index === 2 && thinkingLabel !== 'Thinking' ? 'animate-pulse bg-primary/65' : 'border border-primary/45'
+              }`}
+              aria-hidden="true"
+            />
+            <span>{label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const AgentTaskPanel: React.FC<{ taskId: string; initialStep?: string }> = ({ taskId, initialStep }) => {
+  const [status, setStatus] = useState('running');
+  const [step, setStep] = useState(initialStep || 'Starting');
+  const [result, setResult] = useState('');
+  const [cost, setCost] = useState<number | null>(null);
+  const [approval, setApproval] = useState<{ id: string; action_type: string; payload: Record<string, string>; expires_at: string } | null>(null);
+  const [connected, setConnected] = useState(false);
+  const [connectedEmail, setConnectedEmail] = useState('');
+  const [actionError, setActionError] = useState('');
+
+  useEffect(() => {
+      let active = true;
+      const read = async () => {
+        const { data: response, error } = await supabase.functions.invoke('agentic', {
+          body: { operation: 'status', taskId },
+        });
+        const data = response?.task as { status: string; current_step?: string | null; result_text?: string | null; estimated_cost_usd?: number } | undefined;
+        if (error && active) setActionError('Could not refresh this task.');
+        if (!active || !data) return;
+      setActionError('');
+      setStatus(data.status);
+      setStep(data.current_step || (data.status === 'queued' ? 'Starting' : 'Working'));
+      setResult(data.result_text || '');
+      const nextCost = Number(data.estimated_cost_usd);
+      if (Number.isFinite(nextCost)) setCost(nextCost);
+      if (data.status === 'awaiting_approval') {
+        const { data: pending } = await supabase.from('agent_approvals')
+          .select('id,action_type,payload,expires_at').eq('task_id', taskId).eq('status', 'pending')
+          .order('created_at', { ascending: false }).limit(1).maybeSingle();
+        if (active) setApproval(pending as typeof approval);
+        if (pending && Date.parse(pending.expires_at) <= Date.now()) {
+          void supabase.functions.invoke('agentic', { body: { operation: 'expire', taskId } });
+        }
+      } else if (active) {
+        setApproval(null);
+      }
+      if (['completed', 'partial', 'failed', 'cancelled'].includes(data.status)) window.clearInterval(timer);
+    };
+    const timer = window.setInterval(() => void read(), 1800);
+    void read();
+    void supabase.functions.invoke('agentic', { body: { operation: 'connection_status' } })
+      .then(({ data }) => { if (active) { setConnected(data?.connected === true); setConnectedEmail(data?.email || ''); } });
+    return () => { active = false; window.clearInterval(timer); };
+  }, [taskId]);
+
+  const running = status === 'queued' || status === 'running';
+  const stop = async () => {
+    const { error } = await supabase.functions.invoke('agentic', { body: { operation: 'cancel', taskId } });
+    if (!error) setStatus('cancelled');
+  };
+  const decide = async (operation: 'approve' | 'reject') => {
+    if (!approval) return;
+    setActionError('');
+    const { data, error } = await supabase.functions.invoke('agentic', { body: { operation, approvalId: approval.id } });
+    if (error || data?.error) {
+      setActionError(data?.error || error?.message || 'Could not complete the action.');
+      return;
+    }
+    setStatus(operation === 'approve' ? 'completed' : 'cancelled');
+    setApproval(null);
+  };
+  const connect = async () => {
+    try { await startGoogleAgentConnection(); }
+    catch (error) { setActionError(error instanceof Error ? error.message : 'Could not connect Google.'); }
+  };
+  const disconnect = async () => {
+    const { error } = await supabase.functions.invoke('agentic', { body: { operation: 'disconnect_google' } });
+    if (error) setActionError(error.message);
+    else { setConnected(false); setConnectedEmail(''); }
+  };
+  if (status !== 'awaiting_approval') {
+    return (
+      <div className="text-[14px] text-primary/75" role="status" aria-live="polite">
+        {running ? <span>{step}</span> : <ReactMarkdown>{result || 'This task ended.'}</ReactMarkdown>}
+        {running && <button type="button" onClick={() => void stop()} className="ml-3 underline underline-offset-2">Stop</button>}
+        {actionError && <p className="mt-1 text-red-600">{actionError}</p>}
+      </div>
+    );
+  }
+  return (
+    <div className="w-full max-w-sm text-primary" role="status" aria-live="polite">
+      <div className="flex items-center justify-between gap-4">
+          <p className="text-[15px] font-medium">{running ? 'Working on it' : status === 'awaiting_approval' ? 'Needs your approval' : status === 'completed' ? 'Done' : status === 'partial' ? 'Partly done' : status === 'cancelled' ? 'Stopped' : 'Task stopped'}</p>
+        {running && <button type="button" onClick={() => void stop()} className="text-sm underline underline-offset-2">Stop</button>}
+      </div>
+      {status === 'awaiting_approval' && approval && Date.parse(approval.expires_at) > Date.now() ? (
+        <div className="mt-2 rounded-lg border border-primary/20 p-3 text-sm">
+          <p className="font-medium">Review {approval.action_type === 'propose_email' ? 'email' : 'calendar event'}</p>
+          {approval.action_type === 'propose_email' ? (
+            <div className="mt-2 space-y-1 break-words">
+              <p>To: {approval.payload.to}</p><p>Subject: {approval.payload.subject}</p>
+              <p className="whitespace-pre-wrap">{approval.payload.body}</p>
+            </div>
+          ) : (
+            <div className="mt-2 space-y-1 break-words">
+              <p>{approval.payload.summary}</p><p>{approval.payload.start} to {approval.payload.end}</p>
+              <p>{approval.payload.timezone}</p><p className="whitespace-pre-wrap">{approval.payload.description}</p>
+            </div>
+          )}
+          <div className="mt-3 flex flex-wrap gap-3">
+            {connected ? <button type="button" onClick={() => void decide('approve')} className="rounded-md bg-primary px-3 py-1.5 text-background">Approve</button>
+              : <button type="button" onClick={() => void connect()} className="rounded-md bg-primary px-3 py-1.5 text-background">Connect Google</button>}
+            <button type="button" onClick={() => void decide('reject')} className="underline underline-offset-2">Cancel action</button>
+          </div>
+        </div>
+      ) : <p className="mt-1 text-[14px] text-primary/75">{running ? step : result || 'This task ended.'}</p>}
+      {actionError && <p className="mt-2 text-sm text-red-600">{actionError}</p>}
+      {!running && status !== 'awaiting_approval' && cost !== null && <p className="mt-2 text-xs text-primary/60">Estimated model and search cost: ${cost.toFixed(4)}</p>}
+        {connected && <p className="mt-2 text-xs text-primary/60">Google connected as {connectedEmail}. <button type="button" onClick={() => void disconnect()} className="underline underline-offset-2">Disconnect</button></p>}
+        <p className="mt-2 text-xs text-primary/50">DeepSeek V4 Flash powers this task through OpenRouter. Relevant chat context and search queries may be sent to the model and search provider.</p>
+      </div>
+  );
 };
 
 const ThinkingStatusText: React.FC<ThinkingStatusTextProps> = ({ phase, thoughtText, isImageGeneration = false }) => {
@@ -180,6 +353,15 @@ export const RenderedMessageItem: React.FC<{
 
     const hasAttachments = hasServerAttachments || inlineGeneratedImages.length > 0;
     const hasMainContent = hasTextContent || hasAttachments;
+    const showWorkStatus =
+      !isUser &&
+      (showTypingIndicator || isStreaming) &&
+      !message.isGeneratingImage &&
+      !message.agentTaskId &&
+      isWorkConversation(message.conversationClass);
+    // The task speaks through this assistant message; progress is plain text in
+    // the same bubble and disappears once Meera's answer or question arrives.
+    const showAgentStatus = !isUser && Boolean(message.agentTaskId) && !hasTextContent;
 
     /* Phase progression:
        - text turns: Orchestrating -> Searching memories -> Thinking
@@ -284,9 +466,10 @@ export const RenderedMessageItem: React.FC<{
       if (onToggleStar) onToggleStar(message);
     };
 
-    const showThinkingRow = !isUser && (showTypingIndicator || (phase === 'thoughts' && !!thoughtText));
+    const showThinkingRow =
+      !showWorkStatus && !showAgentStatus && !isUser && (showTypingIndicator || (phase === 'thoughts' && !!thoughtText));
 
-    const onlyThinking = showThinkingRow && !hasMainContent;
+    const onlyThinking = (showThinkingRow || showWorkStatus || showAgentStatus) && !hasMainContent;
 
     const bubbleBase =
       `px-4 py-4 shadow-sm relative overflow-hidden ${bgColor} ${textColor} ` +
@@ -546,6 +729,15 @@ export const RenderedMessageItem: React.FC<{
             )}
 
             {/* Orchestrating / searching / thinking / generating image / thoughts row */}
+            {showAgentStatus && message.agentTaskId && (
+              <AgentTaskPanel taskId={message.agentTaskId} initialStep={message.workStatusLabel} />
+            )}
+            {showWorkStatus && (
+              <div className={`${onlyThinking ? '' : 'mt-1'} flex w-full justify-center`}>
+                <WorkStatusPanel statusLabel={message.workStatusLabel} />
+              </div>
+            )}
+
             {showThinkingRow && (
               <div className={`${onlyThinking ? '' : 'mt-1'} flex w-full items-center justify-center`}>
                 <ThinkingStatusText
