@@ -1081,7 +1081,9 @@ export const chatService = {
               statusLabel: status.current_step || (status.status === 'queued' ? 'Starting' : 'Working'),
             }),
           });
-          const pending = ['queued', 'running'].includes(result.status);
+          // Keep approval tasks in their empty task bubble so AgentTaskPanel
+          // remains mounted and can render the in-chat approval card.
+          const pending = ['queued', 'running', 'awaiting_approval'].includes(result.status);
           const content = pending ? '' : String(result.result_text || '').trim() || 'I could not finish this task. Please try again.';
           // Keep the assistant message empty while the task is running so its
           // in-bubble task watcher can show Stop and replace progress on finish.
