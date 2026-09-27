@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabaseClient';
 
 const STORAGE_KEY = 'meera:google-agent-connect';
 const SCOPES = [
+  'https://www.googleapis.com/auth/gmail.readonly',
   'https://www.googleapis.com/auth/gmail.send',
   'https://www.googleapis.com/auth/calendar.events',
 ];
@@ -12,7 +13,7 @@ export async function startGoogleAgentConnection(): Promise<void> {
   sessionStorage.setItem(STORAGE_KEY, JSON.stringify({
     ownerId: user.id,
     startedAt: Date.now(),
-    returnTo: `${window.location.pathname}${window.location.search}`,
+    returnTo: '/?view=connectors',
   }));
   const { error } = await supabase.auth.signInWithOAuth({
     provider: 'google',

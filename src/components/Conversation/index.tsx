@@ -2,6 +2,7 @@
 
 import { chatService } from '@/app/api/services/chat';
 import { ImagesView, type GalleryImageItem } from '@/components/ImagesView';
+import { ConnectorsView } from '@/components/ConnectorsView';
 import { MeeraVoice } from '@/components/MeeraVoice';
 import { Sidebar } from '@/components/Sidebar';
 import { SupportPanel } from '@/components/ui/SupportPanel';
@@ -46,7 +47,7 @@ const IMAGE_HISTORY_PAGE_SIZE = 48;
 const ENABLE_LEGACY_HISTORY_IMPORT =
   (process.env.NEXT_PUBLIC_ENABLE_LEGACY_HISTORY_IMPORT || 'true').trim().toLowerCase() === 'true';
 
-type SidebarView = 'chat' | 'images';
+type SidebarView = 'chat' | 'images' | 'connectors';
 
 type ChatDisplayItem =
   | { type: 'message'; message: ChatMessageFromServer; id: string }
@@ -1837,6 +1838,14 @@ export const Conversation: React.FC = () => {
     return 'md:ml-[260px]';
   }, [isSidebarVisible]);
   const isImagesView = activeSidebarView === 'images';
+  const isConnectorsView = activeSidebarView === 'connectors';
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('view') === 'connectors') {
+      setActiveSidebarView('connectors');
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
 
   return (
     <div className="relative bg-background overflow-x-hidden">
@@ -1901,7 +1910,7 @@ export const Conversation: React.FC = () => {
 
             <div className="absolute left-1/2 transform -translate-x-1/2 flex items-center">
               <h1 className="text-lg text-primary md:text-xl font-sans">
-                {isImagesView ? 'My images' : process.env.NEXT_PUBLIC_APP_NAME}
+                {isImagesView ? 'My images' : isConnectorsView ? 'Connectors' : process.env.NEXT_PUBLIC_APP_NAME}
               </h1>
             </div>
 
@@ -1912,11 +1921,11 @@ export const Conversation: React.FC = () => {
         <main
           ref={mainScrollRef}
           className="min-h-0 overflow-y-auto overflow-x-hidden w-full scroll-pt-2.5"
-          onScroll={isImagesView ? undefined : handleScroll}
+          onScroll={isImagesView || isConnectorsView ? undefined : handleScroll}
         >
           <div
             className={
-              isImagesView
+              isImagesView || isConnectorsView
                 ? 'px-2 sm:px-0 py-6 w-full min-w-0 max-w-full sm:max-w-5xl xl:max-w-6xl mx-auto'
                 : 'px-2 sm:px-0 py-6 w-full min-w-0 max-w-full sm:max-w-2xl md:max-w-3xl mx-auto'
             }
@@ -1930,6 +1939,8 @@ export const Conversation: React.FC = () => {
                   onLoadMore={handleLoadMoreImages}
                 />
               </div>
+            ) : isConnectorsView ? (
+              <ConnectorsView />
             ) : (
               <>
             {isInitialLoading && (
@@ -2088,13 +2099,13 @@ export const Conversation: React.FC = () => {
           </div>
         </main>
 
-        {isImagesView ? (
+        {isImagesView || isConnectorsView ? (
           <div className="fixed top-4 left-1/2 -translate-x-1/2 z-40">
             <Toast position="conversation" />
           </div>
         ) : null}
 
-        {!isImagesView ? (
+        {!isImagesView && !isConnectorsView ? (
         <footer
           ref={footerRef}
           className="w-full z-40 p-2 md:pr-[13px] bg-transparent"

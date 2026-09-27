@@ -4,14 +4,14 @@ import { ChatMessageFromServer } from '@/types/chat';
 import type { SubscriptionData } from '@/types/subscription';
 import Image from 'next/image';
 import React, { useCallback, useMemo, useState } from 'react';
-import { FiImage } from 'react-icons/fi';
+import { FiImage, FiLink } from 'react-icons/fi';
 import { TbLayoutSidebarLeftCollapse } from 'react-icons/tb';
 import { parseTimestamp } from '@/lib/dateUtils';
 import { PWAInstallEntry } from './PWAInstallEntry';
 import { ProfileMenu } from './ProfileMenu';
 import { SidebarItem } from './Sidebar/SidebarItem';
 
-type SidebarView = 'chat' | 'images';
+type SidebarView = 'chat' | 'images' | 'connectors';
 
 interface SidebarProps {
   isVisible: boolean;
@@ -110,6 +110,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
     if (isMobileOpen) onCloseMobile();
   }, [activeView, isMobileOpen, onCloseMobile, onSelectView]);
 
+  const handleToggleConnectorsView = useCallback(() => {
+    onSelectView(activeView === 'connectors' ? 'chat' : 'connectors');
+    if (isMobileOpen) onCloseMobile();
+  }, [activeView, isMobileOpen, onCloseMobile, onSelectView]);
+
   const handleOpenSettings = useCallback(() => {
     setIsProfileOpen(false);
     if (isMobileOpen) onCloseMobile();
@@ -158,6 +163,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
           >
             <FiImage size={17} />
             <span>Images</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleToggleConnectorsView}
+            className={`mt-1 w-full flex items-center gap-2 rounded-lg px-2.5 py-2 text-[15px] font-semibold transition-colors ${
+              activeView === 'connectors'
+                ? 'bg-primary/10 text-primary'
+                : 'text-primary hover:bg-primary/10'
+            }`}
+            aria-label="Open connectors"
+          >
+            <FiLink size={17} />
+            <span>Connectors</span>
           </button>
         </div>
 
@@ -255,6 +274,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
               >
                 <FiImage size={17} />
                 <span>Images</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleToggleConnectorsView}
+                className={`mt-1 w-full flex items-center gap-2 rounded-lg px-2.5 py-2 text-[15px] font-semibold transition-colors ${
+                  activeView === 'connectors'
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-primary hover:bg-primary/10'
+                }`}
+                aria-label="Open connectors"
+              >
+                <FiLink size={17} />
+                <span>Connectors</span>
               </button>
             </div>
 
