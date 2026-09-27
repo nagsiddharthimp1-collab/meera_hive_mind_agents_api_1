@@ -93,22 +93,29 @@ const WorkStatusPanel: React.FC<{ statusLabel?: string }> = ({ statusLabel }) =>
     return () => window.clearTimeout(timeout);
   }, [nextThinkingLabel]);
 
+  const thirdStepIcon = /web|search/i.test(thinkingLabel)
+    ? '🌐'
+    : /image|generat/i.test(thinkingLabel)
+      ? '🎨'
+      : '✨';
+
   return (
     <div className="w-full max-w-sm text-primary" role="status" aria-live="polite">
-      <p className="mb-2 text-[15px] font-medium">Working</p>
       <div className="space-y-1.5 text-[14px] text-primary/75">
         {[
-          'Orchestrating',
-          'Searching memories',
-          thinkingLabel,
-        ].map((label, index) => (
-          <div key={label} className="flex items-center gap-2">
+          { icon: '🧠', label: 'Orchestrating' },
+          { icon: '🧩', label: 'Searching memories' },
+          { icon: thirdStepIcon, label: thinkingLabel },
+        ].map(({ icon, label }, index) => (
+          <div key={index} className="flex items-center gap-2">
             <span
-              className={`h-2.5 w-2.5 shrink-0 rounded-full ${
-                index === 2 && thinkingLabel !== 'Thinking' ? 'animate-pulse bg-primary/65' : 'border border-primary/45'
+              className={`w-4 shrink-0 text-center text-[13px] leading-none ${
+                index === 2 && thinkingLabel !== 'Thinking' ? 'animate-pulse' : ''
               }`}
               aria-hidden="true"
-            />
+            >
+              {icon}
+            </span>
             <span>{label}</span>
           </div>
         ))}
