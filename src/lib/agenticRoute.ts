@@ -14,7 +14,12 @@ export function isAgentCandidate(message: string): boolean {
   const flight = /\b(find|search|compare|plan|book|pick|choose|recommend)\b.*\b(flights?|airfare|airlines?|air tickets?)\b|\b(flights?|airfare|air tickets?)\b.*\b(from|to|for|between)\b/i.test(value);
   const food = /\b(order|deliver|delivery|find|compare|plan|pick)\b.*\b(food|swiggy|zomato|instamart|groceries|biryani|pizza|meal|dinner|lunch)\b|\b(swiggy|instamart)\b.*\b(order|find|cart|deliver)\b/i.test(value);
   const investors = /\b(find|research|shortlist|identify|compare|contact|reach out to|draft)\b.*\b(investors?|vc firms?|venture capital|angel investors?|funds?)\b|\b(investors?|vc firms?)\b.*\b(for|in|who|that)\b/i.test(value);
-  return delegated || dining || flight || food || investors;
+  // This is only a cheap candidate gate. The backend router still makes the
+  // final agentic decision, so connector language should be intentionally
+  // broad enough that natural requests such as "find my unread mails" reach it.
+  const connector = /\b(gmail|inbox|e-?mails?|mails?|calendar|meetings?|schedule|availability|appointments?)\b/i.test(value)
+    || /\b(?:am i|are we|do i have)\b.{0,60}\bfree\b/i.test(value);
+  return delegated || dining || flight || food || investors || connector;
 }
 
 export async function requestAgentRoute(args: {
