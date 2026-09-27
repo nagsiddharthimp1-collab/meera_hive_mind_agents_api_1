@@ -1070,7 +1070,7 @@ export const chatService = {
           message, sessionId: effectiveSessionId, userMessageId, assistantMessageId, signal,
         });
         if (route.executionMode === 'agentic' && route.taskId) {
-          onMeta?.({ conversationClass: route.conversationClass, agenticActive: true, taskId: route.taskId, statusLabel: 'Planning the steps', model: 'deepseek/deepseek-v4-flash-0731' });
+          onMeta?.({ conversationClass: route.conversationClass, agenticActive: true, taskId: route.taskId, statusLabel: 'Planning the steps', model: 'meera-agent' });
           const result = await waitForAgent({
             supabaseUrl: SUPABASE_URL!, anonKey: SUPABASE_ANON_KEY!, accessToken,
             taskId: route.taskId, signal,

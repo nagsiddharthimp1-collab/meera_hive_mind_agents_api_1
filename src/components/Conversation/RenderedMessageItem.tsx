@@ -164,8 +164,9 @@ const AgentTaskPanel: React.FC<{ taskId: string; initialStep?: string }> = ({ ta
 
   const running = status === 'queued' || status === 'running';
   const stop = async () => {
-    const { error } = await supabase.functions.invoke('agentic', { body: { operation: 'cancel', taskId } });
-    if (!error) setStatus('cancelled');
+    const { data, error } = await supabase.functions.invoke('agentic', { body: { operation: 'cancel', taskId } });
+    if (!error && data?.stopping) setStep('Stopping');
+    else if (!error) setStatus('cancelled');
   };
   const decide = async (operation: 'approve' | 'reject') => {
     if (!approval) return;
@@ -175,7 +176,7 @@ const AgentTaskPanel: React.FC<{ taskId: string; initialStep?: string }> = ({ ta
       setActionError(data?.error || error?.message || 'Could not complete the action.');
       return;
     }
-    setStatus(operation === 'approve' ? 'completed' : 'cancelled');
+    setStatus(data?.status === 'resumed' ? 'running' : operation === 'approve' ? 'completed' : 'cancelled');
     setApproval(null);
   };
   const connect = async () => {
@@ -204,8 +205,13 @@ const AgentTaskPanel: React.FC<{ taskId: string; initialStep?: string }> = ({ ta
       </div>
       {status === 'awaiting_approval' && approval && Date.parse(approval.expires_at) > Date.now() ? (
         <div className="mt-2 rounded-lg border border-primary/20 p-3 text-sm">
-          <p className="font-medium">Review {approval.action_type === 'propose_email' ? 'email' : 'calendar event'}</p>
-          {approval.action_type === 'propose_email' ? (
+          <p className="font-medium">Review {approval.action_type === 'propose_email' ? 'email' : approval.action_type === 'propose_calendar' ? 'calendar event' : 'action'}</p>
+          {approval.action_type === 'hermes_tool' ? (
+            <div className="mt-2 space-y-1 break-words">
+              <p>{approval.payload.summary}</p>
+              {approval.payload.command && <p className="whitespace-pre-wrap font-mono text-xs">{approval.payload.command}</p>}
+            </div>
+          ) : approval.action_type === 'propose_email' ? (
             <div className="mt-2 space-y-1 break-words">
               <p>To: {approval.payload.to}</p><p>Subject: {approval.payload.subject}</p>
               <p className="whitespace-pre-wrap">{approval.payload.body}</p>
@@ -217,7 +223,7 @@ const AgentTaskPanel: React.FC<{ taskId: string; initialStep?: string }> = ({ ta
             </div>
           )}
           <div className="mt-3 flex flex-wrap gap-3">
-            {connected ? <button type="button" onClick={() => void decide('approve')} className="rounded-md bg-primary px-3 py-1.5 text-background">Approve</button>
+            {approval.action_type === 'hermes_tool' || connected ? <button type="button" onClick={() => void decide('approve')} className="rounded-md bg-primary px-3 py-1.5 text-background">Approve once</button>
               : <button type="button" onClick={() => void connect()} className="rounded-md bg-primary px-3 py-1.5 text-background">Connect Google</button>}
             <button type="button" onClick={() => void decide('reject')} className="underline underline-offset-2">Cancel action</button>
           </div>
@@ -226,7 +232,7 @@ const AgentTaskPanel: React.FC<{ taskId: string; initialStep?: string }> = ({ ta
       {actionError && <p className="mt-2 text-sm text-red-600">{actionError}</p>}
       {!running && status !== 'awaiting_approval' && cost !== null && <p className="mt-2 text-xs text-primary/60">Estimated model and search cost: ${cost.toFixed(4)}</p>}
         {connected && <p className="mt-2 text-xs text-primary/60">Google connected as {connectedEmail}. <button type="button" onClick={() => void disconnect()} className="underline underline-offset-2">Disconnect</button></p>}
-        <p className="mt-2 text-xs text-primary/50">DeepSeek V4 Flash powers this task through OpenRouter. Relevant chat context and search queries may be sent to the model and search provider.</p>
+        <p className="mt-2 text-xs text-primary/50">Meera uses its agent tools to complete this task. Relevant task context may be sent to configured model and tool providers.</p>
       </div>
   );
 };
