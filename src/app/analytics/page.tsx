@@ -69,7 +69,34 @@ type FunnelUsersResponse = {
   notes: string[];
 };
 
-const DEFAULT_ALLOWED_DOMAIN = 'himeera.com';
+type AccessProfile = {
+  email: string;
+  role: string;
+  permissions: string[];
+};
+
+type ConversationResponse = {
+  access_mode: 'full' | 'redacted';
+  user: { id: string; email: string | null; name: string | null; created_at: string | null };
+  messages: Array<{
+    message_id: string;
+    content_type: string;
+    content: string;
+    timestamp: string;
+    session_id: string | null;
+    model: string | null;
+    message_type: string | null;
+    is_call: boolean | null;
+  }>;
+  truncated: boolean;
+};
+
+type AccessMember = {
+  email: string;
+  role: 'owner' | 'product_growth' | 'analyst' | 'support';
+  enabled: boolean;
+  permissions: string[];
+};
 
 type RangeKey = '1h' | '1d' | '1w' | '1m' | '1y';
 
@@ -128,6 +155,9 @@ export default function AnalyticsPage() {
   const [isRangeMenuOpen, setIsRangeMenuOpen] = useState<boolean>(false);
   const [accessToken, setAccessToken] = useState<string>('');
   const [email, setEmail] = useState<string>('');
+  const [accessProfile, setAccessProfile] = useState<AccessProfile | null>(null);
+  const [accessLoading, setAccessLoading] = useState<boolean>(true);
+  const [accessError, setAccessError] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
   const [data, setData] = useState<FunnelResponse | null>(null);
@@ -136,6 +166,16 @@ export default function AnalyticsPage() {
   const [stageError, setStageError] = useState<string>('');
   const [stageData, setStageData] = useState<FunnelUsersResponse | null>(null);
   const [stageSearch, setStageSearch] = useState<string>('');
+  const [conversationUser, setConversationUser] = useState<FunnelUserRow | null>(null);
+  const [conversationReason, setConversationReason] = useState<string>('Product and growth review');
+  const [conversationData, setConversationData] = useState<ConversationResponse | null>(null);
+  const [conversationLoading, setConversationLoading] = useState<boolean>(false);
+  const [conversationError, setConversationError] = useState<string>('');
+  const [accessMembers, setAccessMembers] = useState<AccessMember[]>([]);
+  const [memberEmail, setMemberEmail] = useState<string>('');
+  const [memberRole, setMemberRole] = useState<AccessMember['role']>('product_growth');
+  const [memberSaving, setMemberSaving] = useState<boolean>(false);
+  const [memberStatus, setMemberStatus] = useState<string>('');
   const rangeMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -166,10 +206,41 @@ export default function AnalyticsPage() {
     };
   }, []);
 
-  const isAuthorizedViewer = useMemo(() => {
-    const normalized = email.trim().toLowerCase();
-    return normalized.endsWith(`@${DEFAULT_ALLOWED_DOMAIN}`);
-  }, [email]);
+  useEffect(() => {
+    if (!accessToken) {
+      setAccessProfile(null);
+      setAccessLoading(false);
+      return;
+    }
+
+    let canceled = false;
+    const loadAccess = async () => {
+      setAccessLoading(true);
+      setAccessError('');
+      const response = await fetch('/api/analytics/me', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        cache: 'no-store',
+      });
+      const body = (await response.json().catch(() => null)) as (AccessProfile & { error?: string }) | null;
+      if (canceled) return;
+      if (!response.ok || !body) {
+        setAccessProfile(null);
+        setAccessError(body?.error ?? 'Analytics access is not enabled for this account.');
+      } else {
+        setAccessProfile(body);
+      }
+      setAccessLoading(false);
+    };
+
+    void loadAccess();
+    return () => {
+      canceled = true;
+    };
+  }, [accessToken]);
+
+  const isAuthorizedViewer = accessProfile?.permissions.includes('analytics.view') === true;
+  const canViewConversations = accessProfile?.permissions.includes('conversations.view_metadata') === true;
+  const canManageAccess = accessProfile?.permissions.includes('access.manage') === true;
 
   const selectedRangeOption = useMemo(
     () => RANGE_OPTIONS.find((option) => option.key === selectedRange) ?? RANGE_OPTIONS[3],
@@ -345,6 +416,72 @@ export default function AnalyticsPage() {
     });
   }, [stageData, stageSearch]);
 
+  useEffect(() => {
+    if (!accessToken || !canManageAccess) return;
+    let canceled = false;
+    const loadMembers = async () => {
+      const response = await fetch('/api/analytics/access', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        cache: 'no-store',
+      });
+      const body = (await response.json().catch(() => null)) as { members?: AccessMember[] } | null;
+      if (!canceled && response.ok) setAccessMembers(body?.members ?? []);
+    };
+    void loadMembers();
+    return () => {
+      canceled = true;
+    };
+  }, [accessToken, canManageAccess]);
+
+  const openConversations = (user: FunnelUserRow) => {
+    setConversationUser(user);
+    setConversationData(null);
+    setConversationError('');
+  };
+
+  const loadConversations = async () => {
+    if (!conversationUser || !accessToken) return;
+    setConversationLoading(true);
+    setConversationError('');
+    try {
+      const params = new URLSearchParams({ userId: conversationUser.user_id, reason: conversationReason.trim() });
+      const response = await fetch(`/api/analytics/conversations?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        cache: 'no-store',
+      });
+      const body = (await response.json().catch(() => null)) as (ConversationResponse & { error?: string }) | null;
+      if (!response.ok || !body) throw new Error(body?.error ?? 'Unable to load conversations.');
+      setConversationData(body);
+    } catch (err) {
+      setConversationData(null);
+      setConversationError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setConversationLoading(false);
+    }
+  };
+
+  const updateMemberAccess = async (targetEmail: string, targetRole: AccessMember['role'], enabled: boolean) => {
+    if (!accessToken) return;
+    setMemberSaving(true);
+    setMemberStatus('');
+    try {
+      const response = await fetch('/api/analytics/access', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: targetEmail, role: targetRole, enabled }),
+      });
+      const body = (await response.json().catch(() => null)) as (AccessMember & { error?: string }) | null;
+      if (!response.ok || !body) throw new Error(body?.error ?? 'Unable to update access.');
+      setAccessMembers((current) => [...current.filter((item) => item.email !== body.email), body].sort((a, b) => a.email.localeCompare(b.email)));
+      if (targetEmail === memberEmail) setMemberEmail('');
+      setMemberStatus(`${body.enabled ? 'Access saved' : 'Access disabled'} for ${body.email}.`);
+    } catch (err) {
+      setMemberStatus(err instanceof Error ? err.message : String(err));
+    } finally {
+      setMemberSaving(false);
+    }
+  };
+
   if (!accessToken) {
     return (
       <main className="min-h-[100dvh] bg-background text-primary px-6 py-10">
@@ -362,12 +499,23 @@ export default function AnalyticsPage() {
     );
   }
 
+  if (accessLoading) {
+    return (
+      <main className="min-h-[100dvh] bg-background text-primary px-6 py-10">
+        <div className="max-w-3xl mx-auto bg-card rounded-3xl p-8 border border-primary/10">
+          <h1 className="text-3xl font-semibold tracking-tight">Meera Analytics</h1>
+          <p className="mt-3 text-primary/70">Checking your analytics permissions…</p>
+        </div>
+      </main>
+    );
+  }
+
   if (!isAuthorizedViewer) {
     return (
       <main className="min-h-[100dvh] bg-background text-primary px-6 py-10">
         <div className="max-w-3xl mx-auto bg-card rounded-3xl p-8 border border-primary/10">
           <h1 className="text-3xl font-semibold tracking-tight">Meera Analytics</h1>
-          <p className="mt-3 text-primary/70">Access is limited to internal `@himeera.com` accounts.</p>
+          <p className="mt-3 text-primary/70">{accessError || `Access is not enabled for ${email}.`}</p>
         </div>
       </main>
     );
@@ -531,6 +679,70 @@ export default function AnalyticsPage() {
             })}
           </div>
 
+          {canManageAccess && (
+            <div className="mt-6 rounded-2xl border border-primary/15 bg-background p-4 sm:p-5">
+              <div>
+                <h2 className="text-lg font-semibold">Team Access</h2>
+                <p className="mt-1 text-sm text-primary/70">
+                  Grant named access. Product &amp; Growth can review full chats; Support receives redacted chat access.
+                </p>
+              </div>
+              <div className="mt-4 grid gap-2 md:grid-cols-[minmax(0,1fr)_220px_auto]">
+                <input
+                  type="email"
+                  value={memberEmail}
+                  onChange={(event) => setMemberEmail(event.target.value)}
+                  placeholder="teammate@himeera.com"
+                  className="rounded-xl border border-primary/20 bg-white/50 px-3 py-2 text-sm focus:border-primary/45 focus:outline-none"
+                />
+                <select
+                  value={memberRole}
+                  onChange={(event) => setMemberRole(event.target.value as AccessMember['role'])}
+                  className="rounded-xl border border-primary/20 bg-white/50 px-3 py-2 text-sm focus:border-primary/45 focus:outline-none"
+                >
+                  <option value="product_growth">Product &amp; Growth</option>
+                  <option value="analyst">Analyst</option>
+                  <option value="support">Support</option>
+                  <option value="owner">Owner</option>
+                </select>
+                <button
+                  type="button"
+                  disabled={memberSaving || !memberEmail.trim()}
+                  onClick={() => void updateMemberAccess(memberEmail, memberRole, true)}
+                  className="rounded-xl bg-primary px-4 py-2 text-sm font-medium text-background disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {memberSaving ? 'Saving…' : 'Grant access'}
+                </button>
+              </div>
+              {memberStatus && <p className="mt-2 text-sm text-primary/70">{memberStatus}</p>}
+              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                {accessMembers.map((member) => (
+                  <div key={member.email} className="rounded-xl border border-primary/12 bg-white/40 px-3 py-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="font-medium">{member.email}</p>
+                      <div className="flex items-center gap-2">
+                        <span className="rounded-full bg-primary/8 px-2 py-1 text-xs">{member.role.replace(/_/g, ' ')}</span>
+                        {member.email !== accessProfile?.email && (
+                          <button
+                            type="button"
+                            disabled={memberSaving}
+                            onClick={() => void updateMemberAccess(member.email, member.role, !member.enabled)}
+                            className="rounded-lg border border-primary/15 px-2 py-1 text-xs disabled:opacity-50"
+                          >
+                            {member.enabled ? 'Disable' : 'Enable'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <p className="mt-1 text-xs text-primary/60">
+                      {member.enabled ? 'Enabled' : 'Disabled'} · {member.permissions.length} permissions
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="mt-6 rounded-2xl border border-primary/15 bg-background p-4 sm:p-5">
             <h2 className="text-lg font-semibold">Funnel Breakdown</h2>
             {loading && <p className="mt-4 text-primary/70">Loading analytics…</p>}
@@ -683,12 +895,13 @@ export default function AnalyticsPage() {
                             <th className="px-3 py-2 font-medium">WAU</th>
                             <th className="px-3 py-2 font-medium">Messages</th>
                             <th className="px-3 py-2 font-medium">Last Active</th>
+                            {canViewConversations && <th className="px-3 py-2 font-medium">Conversations</th>}
                           </tr>
                         </thead>
                         <tbody>
                           {filteredStageUsers.length === 0 && (
                             <tr>
-                              <td colSpan={13} className="px-3 py-8 text-center text-primary/65">
+                              <td colSpan={canViewConversations ? 14 : 13} className="px-3 py-8 text-center text-primary/65">
                                 No users matched this filter.
                               </td>
                             </tr>
@@ -711,6 +924,17 @@ export default function AnalyticsPage() {
                               <td className="px-3 py-2">{stageFlag(user.active)}</td>
                               <td className="px-3 py-2">{formatInt(user.message_count)}</td>
                               <td className="px-3 py-2">{formatDateTime(user.last_active_at)}</td>
+                              {canViewConversations && (
+                                <td className="px-3 py-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => openConversations(user)}
+                                    className="whitespace-nowrap rounded-lg border border-primary/20 px-3 py-1.5 text-xs font-medium hover:border-primary/45"
+                                  >
+                                    Review chats
+                                  </button>
+                                </td>
+                              )}
                             </tr>
                           ))}
                         </tbody>
@@ -735,6 +959,106 @@ export default function AnalyticsPage() {
           </div>
         </div>
       </div>
+
+      {conversationUser && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-0 sm:items-center sm:p-6">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Conversation review for ${conversationUser.email || conversationUser.user_id}`}
+            className="flex max-h-[92dvh] w-full max-w-4xl flex-col rounded-t-3xl border border-primary/15 bg-card shadow-2xl sm:rounded-3xl"
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-primary/10 p-5">
+              <div>
+                <p className="text-xs uppercase tracking-[0.14em] text-primary/55">Audited conversation review</p>
+                <h2 className="mt-1 text-xl font-semibold">{conversationUser.name || 'Unknown Name'}</h2>
+                <p className="text-sm text-primary/65">{conversationUser.email || conversationUser.user_id}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setConversationUser(null);
+                  setConversationData(null);
+                  setConversationError('');
+                }}
+                className="rounded-xl border border-primary/15 px-3 py-1.5 text-sm"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="border-b border-primary/10 p-5">
+              <label className="text-sm font-medium" htmlFor="conversation-review-reason">
+                Review reason
+              </label>
+              <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                <input
+                  id="conversation-review-reason"
+                  value={conversationReason}
+                  onChange={(event) => setConversationReason(event.target.value)}
+                  className="min-w-0 flex-1 rounded-xl border border-primary/20 bg-white/50 px-3 py-2 text-sm focus:border-primary/45 focus:outline-none"
+                />
+                <button
+                  type="button"
+                  disabled={conversationLoading || conversationReason.trim().length < 3}
+                  onClick={() => void loadConversations()}
+                  className="rounded-xl bg-primary px-4 py-2 text-sm font-medium text-background disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {conversationLoading ? 'Loading…' : 'Open audited chat'}
+                </button>
+              </div>
+              <p className="mt-2 text-xs text-primary/55">Every access is logged with your identity, the user, time, and reason.</p>
+              {conversationError && <p className="mt-2 text-sm text-red-700">{conversationError}</p>}
+            </div>
+
+            <div className="overflow-y-auto p-5">
+              {!conversationData && !conversationLoading && (
+                <p className="rounded-xl border border-dashed border-primary/20 p-4 text-sm text-primary/65">
+                  Enter the business reason and open the chat to begin the audited review.
+                </p>
+              )}
+              {conversationData && (
+                <div>
+                  <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                    <span className="rounded-full bg-primary/8 px-3 py-1 text-xs font-medium uppercase tracking-wide">
+                      {conversationData.access_mode} access
+                    </span>
+                    <span className="text-xs text-primary/55">
+                      {formatInt(conversationData.messages.length)} messages{conversationData.truncated ? ' · latest 500' : ''}
+                    </span>
+                  </div>
+                  <div className="space-y-3">
+                    {conversationData.messages.length === 0 && (
+                      <p className="text-sm text-primary/65">No messages found for this user.</p>
+                    )}
+                    {conversationData.messages.map((message) => (
+                      <div
+                        key={message.message_id}
+                        className={`rounded-2xl border p-4 ${
+                          message.content_type === 'user'
+                            ? 'ml-auto border-primary/20 bg-primary/5 sm:max-w-[85%]'
+                            : 'mr-auto border-primary/10 bg-white/55 sm:max-w-[90%]'
+                        }`}
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-primary/55">
+                          <span className="font-medium uppercase tracking-wide">{message.content_type}</span>
+                          <span>{formatDateTime(message.timestamp)}</span>
+                        </div>
+                        <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6">{message.content || '—'}</p>
+                        {(message.model || message.session_id) && (
+                          <p className="mt-2 text-[11px] text-primary/45">
+                            {[message.model, message.session_id].filter(Boolean).join(' · ')}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
