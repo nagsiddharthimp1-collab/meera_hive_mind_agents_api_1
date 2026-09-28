@@ -2,6 +2,7 @@
 
 import { supabase } from '@/lib/supabaseClient';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 type FunnelStageKey = 'signups' | 'payment_page_opened' | 'paid' | 'active';
@@ -109,14 +110,69 @@ const RANGE_OPTIONS: Array<{ key: RangeKey; label: string; daysBack: number }> =
 ];
 
 const ANALYTICS_NAV_ITEMS = [
-  { href: '#overview', label: 'Home', short: 'HM', description: 'Executive snapshot' },
-  { href: '#funnel', label: 'Funnel', short: 'FN', description: 'Conversion journey' },
-  { href: '#acquisition', label: 'Acquisition', short: 'AQ', description: 'Sources & campaigns' },
-  { href: '#users', label: 'Users', short: 'US', description: 'User drilldown' },
-  { href: '#conversations', label: 'Conversations', short: 'CH', description: 'Audited reviews' },
-  { href: '#team-access', label: 'Team Access', short: 'TA', description: 'Roles & permissions' },
-  { href: '#data-quality', label: 'Data Quality', short: 'DQ', description: 'Rules & freshness' },
+  { href: '/analytics', label: 'Home', short: 'HM', description: 'Executive snapshot' },
+  { href: '/analytics/funnel', label: 'Funnel', short: 'FN', description: 'Conversion journey' },
+  { href: '/analytics/acquisition', label: 'Acquisition', short: 'AQ', description: 'Sources & campaigns' },
+  { href: '/analytics/users', label: 'Users', short: 'US', description: 'User drilldown' },
+  { href: '/analytics/conversations', label: 'Conversations', short: 'CH', description: 'Audited reviews' },
+  { href: '/analytics/team-access', label: 'Team Access', short: 'TA', description: 'Roles & permissions' },
+  { href: '/analytics/data-quality', label: 'Data Quality', short: 'DQ', description: 'Rules & freshness' },
 ] as const;
+
+type AnalyticsView = 'home' | 'funnel' | 'acquisition' | 'users' | 'conversations' | 'team-access' | 'data-quality';
+
+const PAGE_META: Record<AnalyticsView, { eyebrow: string; title: string; description: string }> = {
+  home: {
+    eyebrow: 'Analytics home',
+    title: 'Your complete growth snapshot',
+    description: 'The essential customer journey, conversion, and activity signals in one view.',
+  },
+  funnel: {
+    eyebrow: 'Conversion intelligence',
+    title: 'Signup to retention funnel',
+    description: 'See where users progress, convert, and drop from the journey.',
+  },
+  acquisition: {
+    eyebrow: 'Growth intelligence',
+    title: 'Acquisition channels',
+    description: 'Understand which sources and campaigns bring users into each stage.',
+  },
+  users: {
+    eyebrow: 'Customer intelligence',
+    title: 'User explorer',
+    description: 'Search real users and inspect their acquisition, payment, and activity signals.',
+  },
+  conversations: {
+    eyebrow: 'Conversation intelligence',
+    title: 'Audited chat review',
+    description: 'Review recent customer conversations with role-based access and a complete audit trail.',
+  },
+  'team-access': {
+    eyebrow: 'Workspace security',
+    title: 'Team access',
+    description: 'Control who can view analytics, customer data, and conversations.',
+  },
+  'data-quality': {
+    eyebrow: 'Trust layer',
+    title: 'Data quality & freshness',
+    description: 'Understand the definitions, exclusions, and freshness rules behind every metric.',
+  },
+};
+
+function resolveAnalyticsView(pathname: string): AnalyticsView {
+  const segment = pathname.split('/').filter(Boolean)[1];
+  if (
+    segment === 'funnel' ||
+    segment === 'acquisition' ||
+    segment === 'users' ||
+    segment === 'conversations' ||
+    segment === 'team-access' ||
+    segment === 'data-quality'
+  ) {
+    return segment;
+  }
+  return 'home';
+}
 
 function todayDateString(): string {
   return new Date().toISOString().slice(0, 10);
@@ -159,6 +215,10 @@ function stageFlag(isTrue: boolean): string {
 }
 
 export default function AnalyticsPage() {
+  const pathname = usePathname();
+  const currentView = resolveAnalyticsView(pathname);
+  const pageMeta = PAGE_META[currentView];
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
   const [from, setFrom] = useState<string>(dateDaysAgo(30));
   const [to, setTo] = useState<string>(todayDateString());
   const [selectedRange, setSelectedRange] = useState<RangeKey>('1m');
@@ -187,6 +247,18 @@ export default function AnalyticsPage() {
   const [memberSaving, setMemberSaving] = useState<boolean>(false);
   const [memberStatus, setMemberStatus] = useState<string>('');
   const rangeMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem('analytics-sidebar-open');
+    setSidebarOpen(window.innerWidth < 1024 ? false : saved === null || saved === 'true');
+  }, []);
+
+  const toggleSidebar = () => {
+    setSidebarOpen((open) => {
+      window.localStorage.setItem('analytics-sidebar-open', String(!open));
+      return !open;
+    });
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -251,6 +323,8 @@ export default function AnalyticsPage() {
   const isAuthorizedViewer = accessProfile?.permissions.includes('analytics.view') === true;
   const canViewConversations = accessProfile?.permissions.includes('conversations.view_metadata') === true;
   const canManageAccess = accessProfile?.permissions.includes('access.manage') === true;
+  const needsFunnelData = currentView !== 'team-access';
+  const needsStageUsers = currentView === 'acquisition' || currentView === 'users' || currentView === 'conversations';
 
   const selectedRangeOption = useMemo(
     () => RANGE_OPTIONS.find((option) => option.key === selectedRange) ?? RANGE_OPTIONS[3],
@@ -295,7 +369,7 @@ export default function AnalyticsPage() {
   };
 
   useEffect(() => {
-    if (!accessToken || !isAuthorizedViewer) {
+    if (!needsFunnelData || !accessToken || !isAuthorizedViewer) {
       setLoading(false);
       return;
     }
@@ -345,10 +419,16 @@ export default function AnalyticsPage() {
       canceled = true;
       controller.abort();
     };
-  }, [accessToken, from, isAuthorizedViewer, to]);
+  }, [
+    accessToken,
+    from,
+    isAuthorizedViewer,
+    needsFunnelData,
+    to,
+  ]);
 
   useEffect(() => {
-    if (!selectedStage || !accessToken || !isAuthorizedViewer) {
+    if (!needsStageUsers || !selectedStage || !accessToken || !isAuthorizedViewer) {
       setStageLoading(false);
       setStageError('');
       setStageData(null);
@@ -400,7 +480,14 @@ export default function AnalyticsPage() {
       canceled = true;
       controller.abort();
     };
-  }, [accessToken, from, isAuthorizedViewer, selectedStage, to]);
+  }, [
+    accessToken,
+    from,
+    isAuthorizedViewer,
+    needsStageUsers,
+    selectedStage,
+    to,
+  ]);
 
   const filteredStageUsers = useMemo(() => {
     if (!stageData) return [] as FunnelUserRow[];
@@ -482,7 +569,9 @@ export default function AnalyticsPage() {
       });
       const body = (await response.json().catch(() => null)) as (AccessMember & { error?: string }) | null;
       if (!response.ok || !body) throw new Error(body?.error ?? 'Unable to update access.');
-      setAccessMembers((current) => [...current.filter((item) => item.email !== body.email), body].sort((a, b) => a.email.localeCompare(b.email)));
+      setAccessMembers((current) =>
+        [...current.filter((item) => item.email !== body.email), body].sort((a, b) => a.email.localeCompare(b.email)),
+      );
       if (targetEmail === memberEmail) setMemberEmail('');
       setMemberStatus(`${body.enabled ? 'Access saved' : 'Access disabled'} for ${body.email}.`);
     } catch (err) {
@@ -593,499 +682,658 @@ export default function AnalyticsPage() {
 
   return (
     <main className="min-h-[100dvh] bg-background px-4 py-4 text-primary sm:px-6 sm:py-6">
-      <div className="mx-auto max-w-[1500px] lg:grid lg:grid-cols-[250px_minmax(0,1fr)] lg:gap-6">
-        <aside className="mb-4 lg:sticky lg:top-6 lg:mb-0 lg:h-[calc(100dvh-3rem)]">
-          <div className="overflow-hidden rounded-3xl bg-[#071a13] text-white shadow-[0_18px_50px_rgba(4,36,24,0.2)] lg:flex lg:h-full lg:flex-col">
-            <div className="border-b border-white/10 px-5 py-5">
-              <div className="flex items-center gap-3">
-                <div className="grid h-10 w-10 place-items-center rounded-2xl bg-emerald-300 font-semibold text-[#071a13]">M</div>
-                <div>
-                  <p className="text-sm font-semibold">Meera Analytics</p>
-                  <p className="text-xs text-white/55">Decision workspace</p>
+      {sidebarOpen && (
+        <button
+          type="button"
+          aria-label="Close analytics sidebar"
+          className="fixed inset-0 z-30 bg-black/45 lg:hidden"
+          onClick={toggleSidebar}
+        />
+      )}
+      <div
+        className={`mx-auto max-w-[1500px] transition-[grid-template-columns] duration-200 lg:grid lg:gap-6 ${
+          sidebarOpen ? 'lg:grid-cols-[250px_minmax(0,1fr)]' : 'lg:grid-cols-[76px_minmax(0,1fr)]'
+        }`}
+      >
+        <aside
+          className={`fixed inset-y-0 left-0 z-40 w-[280px] transform p-3 transition-transform duration-200 lg:sticky lg:top-6 lg:z-auto lg:h-[calc(100dvh-3rem)] lg:w-auto lg:translate-x-0 lg:p-0 ${
+            sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
+        >
+          <div className="flex h-full flex-col overflow-hidden rounded-3xl bg-[#071a13] text-white shadow-[0_18px_50px_rgba(4,36,24,0.2)]">
+            <div className={`border-b border-white/10 py-5 ${sidebarOpen ? 'px-5' : 'px-3'}`}>
+              <div className={`flex items-center ${sidebarOpen ? 'justify-between gap-3' : 'justify-center'}`}>
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="grid h-10 w-10 place-items-center rounded-2xl bg-emerald-300 font-semibold text-[#071a13]">
+                    M
+                  </div>
+                  {sidebarOpen && (
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold">Meera Analytics</p>
+                      <p className="text-xs text-white/55">Decision workspace</p>
+                    </div>
+                  )}
                 </div>
+                {sidebarOpen && (
+                  <button
+                    type="button"
+                    onClick={toggleSidebar}
+                    aria-label="Close sidebar"
+                    className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-white/10 text-white/70 hover:bg-white/10 hover:text-white"
+                  >
+                    ←
+                  </button>
+                )}
               </div>
             </div>
 
-            <nav aria-label="Analytics sections" className="flex gap-2 overflow-x-auto p-3 lg:flex-1 lg:flex-col lg:overflow-y-auto">
-              {ANALYTICS_NAV_ITEMS.filter((item) => canManageAccess || item.href !== '#team-access').map((item, index) => (
-                <a
-                  key={item.href}
-                  href={item.href}
-                  aria-current={index === 0 ? 'page' : undefined}
-                  className={`group flex min-w-max items-center gap-3 rounded-2xl px-3 py-2.5 text-sm transition lg:min-w-0 ${
-                    index === 0 ? 'bg-white/12 text-white' : 'text-white/68 hover:bg-white/8 hover:text-white'
-                  }`}
-                >
-                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-white/10 text-[10px] font-semibold tracking-wider group-hover:bg-emerald-300 group-hover:text-[#071a13]">
-                    {item.short}
-                  </span>
-                  <span>
-                    <span className="block font-medium">{item.label}</span>
-                    <span className="hidden text-[11px] text-white/45 lg:block">{item.description}</span>
-                  </span>
-                </a>
-              ))}
+            <nav aria-label="Analytics sections" className="flex flex-1 flex-col gap-2 overflow-y-auto p-3">
+              {ANALYTICS_NAV_ITEMS.filter((item) => canManageAccess || item.href !== '/analytics/team-access').map(
+                (item) => {
+                  const isCurrent = pathname === item.href;
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      aria-current={isCurrent ? 'page' : undefined}
+                      title={!sidebarOpen ? item.label : undefined}
+                      onClick={() => {
+                        if (window.innerWidth < 1024) toggleSidebar();
+                      }}
+                      className={`group flex items-center rounded-2xl py-2.5 text-sm transition ${
+                        sidebarOpen ? 'gap-3 px-3' : 'justify-center px-2'
+                      } ${isCurrent ? 'bg-white/12 text-white' : 'text-white/68 hover:bg-white/8 hover:text-white'}`}
+                    >
+                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-white/10 text-[10px] font-semibold tracking-wider group-hover:bg-emerald-300 group-hover:text-[#071a13]">
+                        {item.short}
+                      </span>
+                      {sidebarOpen && (
+                        <span className="min-w-0">
+                          <span className="block font-medium">{item.label}</span>
+                          <span className="block text-[11px] text-white/45">{item.description}</span>
+                        </span>
+                      )}
+                    </Link>
+                  );
+                },
+              )}
             </nav>
 
-            <div className="hidden border-t border-white/10 p-4 lg:block">
-              <div className="rounded-2xl bg-white/6 p-3">
-                <p className="text-[10px] uppercase tracking-[0.16em] text-emerald-200/70">Signed in</p>
-                <p className="mt-1 truncate text-xs text-white/80">{accessProfile?.email}</p>
-                <p className="mt-1 text-[11px] capitalize text-white/45">{accessProfile?.role.replace(/_/g, ' ')}</p>
+            {sidebarOpen && (
+              <div className="border-t border-white/10 p-4">
+                <div className="rounded-2xl bg-white/6 p-3">
+                  <p className="text-[10px] uppercase tracking-[0.16em] text-emerald-200/70">Signed in</p>
+                  <p className="mt-1 truncate text-xs text-white/80">{accessProfile?.email}</p>
+                  <p className="mt-1 text-[11px] capitalize text-white/45">{accessProfile?.role.replace(/_/g, ' ')}</p>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </aside>
 
         <div className="min-w-0">
-        <div id="overview" className="scroll-mt-6 rounded-3xl border border-primary/10 bg-card p-5 sm:p-7">
-          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-primary/60">himeera.com/analytics</p>
-              <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight mt-2">
-                Signups → Payment Opened → Paid → WAU
-              </h1>
-              <p className="mt-2 text-sm text-primary/70">
-                Cohort funnel with weekly active users for the selected window.
-              </p>
-            </div>
-
-            <div className="flex flex-col items-start md:items-end gap-2">
-              <div className="relative" ref={rangeMenuRef}>
+          <div id="overview" className="scroll-mt-6 rounded-3xl border border-primary/10 bg-card p-5 sm:p-7">
+            <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+              <div className="flex min-w-0 items-start gap-3">
                 <button
                   type="button"
-                  className="min-w-[150px] rounded-2xl border border-white/15 bg-[#090d15] px-4 py-2.5 text-left text-sm text-white shadow-[0_1px_0_rgba(255,255,255,0.05)_inset] transition hover:border-white/30"
-                  onClick={() => setIsRangeMenuOpen((open) => !open)}
-                  aria-haspopup="listbox"
-                  aria-expanded={isRangeMenuOpen}
+                  onClick={toggleSidebar}
+                  aria-label={sidebarOpen ? 'Collapse sidebar' : 'Open sidebar'}
+                  className={`mt-0.5 grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-primary/15 bg-background text-lg hover:border-primary/35 ${
+                    sidebarOpen ? 'lg:hidden' : ''
+                  }`}
                 >
-                  <span className="flex items-center justify-between gap-3">
-                    <span>{selectedRangeOption.label}</span>
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      xmlns="http://www.w3.org/2000/svg"
-                      className={`transition ${isRangeMenuOpen ? 'rotate-180' : ''}`}
-                    >
-                      <path d="M6 9L12 15L18 9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                    </svg>
-                  </span>
+                  ☰
                 </button>
+                <div className="min-w-0">
+                  <p className="text-xs uppercase tracking-[0.2em] text-primary/60">{pageMeta.eyebrow}</p>
+                  <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight mt-2">{pageMeta.title}</h1>
+                  <p className="mt-2 text-sm text-primary/70">{pageMeta.description}</p>
+                </div>
+              </div>
 
-                {isRangeMenuOpen && (
-                  <div className="absolute right-0 z-30 mt-2 w-[170px] rounded-2xl border border-white/15 bg-[#060a12] p-1.5 shadow-[0_16px_38px_rgba(0,0,0,0.55)]">
-                    {RANGE_OPTIONS.map((option) => {
-                      const isSelected = option.key === selectedRange;
+              {currentView !== 'team-access' && currentView !== 'data-quality' && (
+                <div className="flex flex-col items-start gap-2 md:items-end">
+                  <div className="relative" ref={rangeMenuRef}>
+                    <button
+                      type="button"
+                      className="min-w-[150px] rounded-2xl border border-white/15 bg-[#090d15] px-4 py-2.5 text-left text-sm text-white shadow-[0_1px_0_rgba(255,255,255,0.05)_inset] transition hover:border-white/30"
+                      onClick={() => setIsRangeMenuOpen((open) => !open)}
+                      aria-haspopup="listbox"
+                      aria-expanded={isRangeMenuOpen}
+                    >
+                      <span className="flex items-center justify-between gap-3">
+                        <span>{selectedRangeOption.label}</span>
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          xmlns="http://www.w3.org/2000/svg"
+                          className={`transition ${isRangeMenuOpen ? 'rotate-180' : ''}`}
+                        >
+                          <path d="M6 9L12 15L18 9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                        </svg>
+                      </span>
+                    </button>
+
+                    {isRangeMenuOpen && (
+                      <div className="absolute right-0 z-30 mt-2 w-[170px] rounded-2xl border border-white/15 bg-[#060a12] p-1.5 shadow-[0_16px_38px_rgba(0,0,0,0.55)]">
+                        {RANGE_OPTIONS.map((option) => {
+                          const isSelected = option.key === selectedRange;
+                          return (
+                            <button
+                              key={option.key}
+                              type="button"
+                              role="option"
+                              aria-selected={isSelected}
+                              className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm transition ${
+                                isSelected
+                                  ? 'bg-white/12 text-white'
+                                  : 'text-white/80 hover:bg-white/8 hover:text-white'
+                              }`}
+                              onClick={() => applyRange(option.key)}
+                            >
+                              <span>{option.label}</span>
+                              {isSelected && (
+                                <svg
+                                  width="14"
+                                  height="14"
+                                  viewBox="0 0 20 20"
+                                  fill="none"
+                                  xmlns="http://www.w3.org/2000/svg"
+                                >
+                                  <path
+                                    d="M4.5 10.2L8.3 13.7L15.5 6.3"
+                                    stroke="currentColor"
+                                    strokeWidth="1.8"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  />
+                                </svg>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-xs text-primary/60">
+                    Window: {from} to {to}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {(currentView === 'home' ||
+              currentView === 'funnel' ||
+              currentView === 'acquisition' ||
+              currentView === 'users' ||
+              currentView === 'conversations') && (
+              <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                {stageCards.map((card) => {
+                  const isSelected = selectedStage === card.key;
+                  return (
+                    <button
+                      key={card.key}
+                      type="button"
+                      onClick={() => {
+                        setSelectedStage(card.key);
+                        setStageSearch('');
+                      }}
+                      className={`relative overflow-hidden rounded-2xl border bg-background p-4 text-left transition ${
+                        isSelected
+                          ? 'border-primary/60 shadow-[0_0_0_1px_rgba(15,73,49,0.35)_inset]'
+                          : 'border-primary/15 hover:border-primary/30'
+                      }`}
+                    >
+                      <span className={`absolute inset-x-0 top-0 h-1 ${card.accent}`} />
+                      <p className="text-xs text-primary/70 uppercase tracking-[0.16em]">{card.label}</p>
+                      <p className="text-3xl font-semibold mt-2">{formatInt(card.value)}</p>
+                      <p className="mt-2 text-xs text-primary/65">
+                        {isSelected ? 'Selected · details loaded below' : card.hint}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {currentView === 'home' && (
+              <div className="mt-6 rounded-2xl border border-primary/15 bg-background p-4 sm:p-5">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.16em] text-primary/55">Explore the workspace</p>
+                  <h2 className="mt-1 text-lg font-semibold">Open a focused analytics view</h2>
+                </div>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {ANALYTICS_NAV_ITEMS.filter(
+                    (item) => item.href !== '/analytics' && (canManageAccess || item.href !== '/analytics/team-access'),
+                  ).map((item) => (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className="group rounded-2xl border border-primary/12 bg-white/45 p-4 transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-sm"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="grid h-9 w-9 place-items-center rounded-xl bg-primary/8 text-[10px] font-semibold tracking-wider">
+                          {item.short}
+                        </span>
+                        <div>
+                          <p className="font-medium">{item.label}</p>
+                          <p className="text-xs text-primary/55">{item.description}</p>
+                        </div>
+                      </div>
+                      <p className="mt-3 text-xs font-medium text-primary/60 group-hover:text-primary">Open page →</p>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {currentView === 'team-access' && canManageAccess && (
+              <div
+                id="team-access"
+                className="mt-6 scroll-mt-6 rounded-2xl border border-primary/15 bg-background p-4 sm:p-5"
+              >
+                <div>
+                  <h2 className="text-lg font-semibold">Team Access</h2>
+                  <p className="mt-1 text-sm text-primary/70">
+                    Grant named access. Product &amp; Growth can review full chats; Support receives redacted chat
+                    access.
+                  </p>
+                </div>
+                <div className="mt-4 grid gap-2 md:grid-cols-[minmax(0,1fr)_220px_auto]">
+                  <input
+                    type="email"
+                    value={memberEmail}
+                    onChange={(event) => setMemberEmail(event.target.value)}
+                    placeholder="teammate@himeera.com"
+                    className="rounded-xl border border-primary/20 bg-white/50 px-3 py-2 text-sm focus:border-primary/45 focus:outline-none"
+                  />
+                  <select
+                    value={memberRole}
+                    onChange={(event) => setMemberRole(event.target.value as AccessMember['role'])}
+                    className="rounded-xl border border-primary/20 bg-white/50 px-3 py-2 text-sm focus:border-primary/45 focus:outline-none"
+                  >
+                    <option value="product_growth">Product &amp; Growth</option>
+                    <option value="analyst">Analyst</option>
+                    <option value="support">Support</option>
+                    <option value="owner">Owner</option>
+                  </select>
+                  <button
+                    type="button"
+                    disabled={memberSaving || !memberEmail.trim()}
+                    onClick={() => void updateMemberAccess(memberEmail, memberRole, true)}
+                    className="rounded-xl bg-primary px-4 py-2 text-sm font-medium text-background disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {memberSaving ? 'Saving…' : 'Grant access'}
+                  </button>
+                </div>
+                {memberStatus && <p className="mt-2 text-sm text-primary/70">{memberStatus}</p>}
+                <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                  {accessMembers.map((member) => (
+                    <div key={member.email} className="rounded-xl border border-primary/12 bg-white/40 px-3 py-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="font-medium">{member.email}</p>
+                        <div className="flex items-center gap-2">
+                          <span className="rounded-full bg-primary/8 px-2 py-1 text-xs">
+                            {member.role.replace(/_/g, ' ')}
+                          </span>
+                          {member.email !== accessProfile?.email && (
+                            <button
+                              type="button"
+                              disabled={memberSaving}
+                              onClick={() => void updateMemberAccess(member.email, member.role, !member.enabled)}
+                              className="rounded-lg border border-primary/15 px-2 py-1 text-xs disabled:opacity-50"
+                            >
+                              {member.enabled ? 'Disable' : 'Enable'}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <p className="mt-1 text-xs text-primary/60">
+                        {member.enabled ? 'Enabled' : 'Disabled'} · {member.permissions.length} permissions
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {currentView === 'team-access' && !canManageAccess && (
+              <div className="mt-6 rounded-2xl border border-amber-300 bg-amber-50 p-5 text-amber-900">
+                <h2 className="font-semibold">Owner access required</h2>
+                <p className="mt-1 text-sm">Only analytics owners can change team roles and permissions.</p>
+              </div>
+            )}
+
+            {(currentView === 'home' || currentView === 'funnel') && (
+              <div
+                id="funnel"
+                className="mt-6 scroll-mt-6 rounded-2xl border border-primary/15 bg-background p-4 sm:p-5"
+              >
+                <h2 className="text-lg font-semibold">Funnel Breakdown</h2>
+                {loading && <p className="mt-4 text-primary/70">Loading analytics…</p>}
+                {error && <p className="mt-4 text-red-700">{error}</p>}
+
+                {!loading && !error && (
+                  <div className="mt-4 space-y-4">
+                    {funnelSteps.map((step) => {
+                      const widthPct = Math.max(6, Math.round((step.value / maxStep) * 100));
+                      const isSelected = selectedStage === step.key;
                       return (
                         <button
-                          key={option.key}
+                          key={step.key}
                           type="button"
-                          role="option"
-                          aria-selected={isSelected}
-                          className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm transition ${
-                            isSelected ? 'bg-white/12 text-white' : 'text-white/80 hover:bg-white/8 hover:text-white'
+                          onClick={() => {
+                            setSelectedStage(step.key);
+                            setStageSearch('');
+                          }}
+                          className={`w-full rounded-xl p-2 text-left transition ${
+                            isSelected ? 'bg-primary/5' : 'hover:bg-primary/5'
                           }`}
-                          onClick={() => applyRange(option.key)}
                         >
-                          <span>{option.label}</span>
-                          {isSelected && (
-                            <svg width="14" height="14" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                              <path
-                                d="M4.5 10.2L8.3 13.7L15.5 6.3"
-                                stroke="currentColor"
-                                strokeWidth="1.8"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              />
-                            </svg>
-                          )}
+                          <div className="flex flex-wrap items-end justify-between gap-2">
+                            <div>
+                              <p className="font-medium">{step.label}</p>
+                              <p className="text-xs text-primary/65">{step.conversionLabel}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-semibold">{formatInt(step.value)}</p>
+                              <p className="text-xs text-primary/65">
+                                {step.conversionValue === null ? 'WAU' : formatPct(step.conversionValue)}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="mt-2 h-3 rounded-full bg-primary/10 overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-primary"
+                              style={{ width: `${widthPct}%`, transition: 'width 360ms ease' }}
+                            />
+                          </div>
                         </button>
                       );
                     })}
                   </div>
                 )}
               </div>
-              <p className="text-xs text-primary/60">
-                Window: {from} to {to}
-              </p>
-            </div>
-          </div>
+            )}
 
-          <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {stageCards.map((card) => {
-              const isSelected = selectedStage === card.key;
-              return (
-                <button
-                  key={card.key}
-                  type="button"
-                  onClick={() => {
-                    setSelectedStage(card.key);
-                    setStageSearch('');
-                  }}
-                  className={`relative overflow-hidden rounded-2xl border bg-background p-4 text-left transition ${
-                    isSelected
-                      ? 'border-primary/60 shadow-[0_0_0_1px_rgba(15,73,49,0.35)_inset]'
-                      : 'border-primary/15 hover:border-primary/30'
-                  }`}
-                >
-                  <span className={`absolute inset-x-0 top-0 h-1 ${card.accent}`} />
-                  <p className="text-xs text-primary/70 uppercase tracking-[0.16em]">{card.label}</p>
-                  <p className="text-3xl font-semibold mt-2">{formatInt(card.value)}</p>
-                  <p className="mt-2 text-xs text-primary/65">
-                    {isSelected ? 'Selected · details loaded below' : card.hint}
-                  </p>
-                </button>
-              );
-            })}
-          </div>
-
-          {canManageAccess && (
-            <div id="team-access" className="mt-6 scroll-mt-6 rounded-2xl border border-primary/15 bg-background p-4 sm:p-5">
-              <div>
-                <h2 className="text-lg font-semibold">Team Access</h2>
-                <p className="mt-1 text-sm text-primary/70">
-                  Grant named access. Product &amp; Growth can review full chats; Support receives redacted chat access.
-                </p>
-              </div>
-              <div className="mt-4 grid gap-2 md:grid-cols-[minmax(0,1fr)_220px_auto]">
-                <input
-                  type="email"
-                  value={memberEmail}
-                  onChange={(event) => setMemberEmail(event.target.value)}
-                  placeholder="teammate@himeera.com"
-                  className="rounded-xl border border-primary/20 bg-white/50 px-3 py-2 text-sm focus:border-primary/45 focus:outline-none"
-                />
-                <select
-                  value={memberRole}
-                  onChange={(event) => setMemberRole(event.target.value as AccessMember['role'])}
-                  className="rounded-xl border border-primary/20 bg-white/50 px-3 py-2 text-sm focus:border-primary/45 focus:outline-none"
-                >
-                  <option value="product_growth">Product &amp; Growth</option>
-                  <option value="analyst">Analyst</option>
-                  <option value="support">Support</option>
-                  <option value="owner">Owner</option>
-                </select>
-                <button
-                  type="button"
-                  disabled={memberSaving || !memberEmail.trim()}
-                  onClick={() => void updateMemberAccess(memberEmail, memberRole, true)}
-                  className="rounded-xl bg-primary px-4 py-2 text-sm font-medium text-background disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {memberSaving ? 'Saving…' : 'Grant access'}
-                </button>
-              </div>
-              {memberStatus && <p className="mt-2 text-sm text-primary/70">{memberStatus}</p>}
-              <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                {accessMembers.map((member) => (
-                  <div key={member.email} className="rounded-xl border border-primary/12 bg-white/40 px-3 py-2">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="font-medium">{member.email}</p>
-                      <div className="flex items-center gap-2">
-                        <span className="rounded-full bg-primary/8 px-2 py-1 text-xs">{member.role.replace(/_/g, ' ')}</span>
-                        {member.email !== accessProfile?.email && (
-                          <button
-                            type="button"
-                            disabled={memberSaving}
-                            onClick={() => void updateMemberAccess(member.email, member.role, !member.enabled)}
-                            className="rounded-lg border border-primary/15 px-2 py-1 text-xs disabled:opacity-50"
-                          >
-                            {member.enabled ? 'Disable' : 'Enable'}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    <p className="mt-1 text-xs text-primary/60">
-                      {member.enabled ? 'Enabled' : 'Disabled'} · {member.permissions.length} permissions
+            {currentView === 'acquisition' && (
+              <div
+                id="acquisition"
+                className="mt-6 scroll-mt-6 rounded-2xl border border-primary/15 bg-background p-4 sm:p-5"
+              >
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.16em] text-primary/55">Acquisition intelligence</p>
+                    <h2 className="mt-1 text-lg font-semibold">Where users are coming from</h2>
+                    <p className="mt-1 text-sm text-primary/70">
+                      Source mix for the selected {stageData?.stage.label?.toLowerCase() ?? 'funnel stage'}.
                     </p>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div id="funnel" className="mt-6 scroll-mt-6 rounded-2xl border border-primary/15 bg-background p-4 sm:p-5">
-            <h2 className="text-lg font-semibold">Funnel Breakdown</h2>
-            {loading && <p className="mt-4 text-primary/70">Loading analytics…</p>}
-            {error && <p className="mt-4 text-red-700">{error}</p>}
-
-            {!loading && !error && (
-              <div className="mt-4 space-y-4">
-                {funnelSteps.map((step) => {
-                  const widthPct = Math.max(6, Math.round((step.value / maxStep) * 100));
-                  const isSelected = selectedStage === step.key;
-                  return (
-                    <button
-                      key={step.key}
-                      type="button"
-                      onClick={() => {
-                        setSelectedStage(step.key);
-                        setStageSearch('');
-                      }}
-                      className={`w-full rounded-xl p-2 text-left transition ${
-                        isSelected ? 'bg-primary/5' : 'hover:bg-primary/5'
-                      }`}
-                    >
-                      <div className="flex flex-wrap items-end justify-between gap-2">
-                        <div>
-                          <p className="font-medium">{step.label}</p>
-                          <p className="text-xs text-primary/65">{step.conversionLabel}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-semibold">{formatInt(step.value)}</p>
-                          <p className="text-xs text-primary/65">
-                            {step.conversionValue === null ? 'WAU' : formatPct(step.conversionValue)}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="mt-2 h-3 rounded-full bg-primary/10 overflow-hidden">
-                        <div
-                          className="h-full rounded-full bg-primary"
-                          style={{ width: `${widthPct}%`, transition: 'width 360ms ease' }}
-                        />
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          <div id="acquisition" className="mt-6 scroll-mt-6 rounded-2xl border border-primary/15 bg-background p-4 sm:p-5">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <p className="text-xs uppercase tracking-[0.16em] text-primary/55">Acquisition intelligence</p>
-                <h2 className="mt-1 text-lg font-semibold">Where users are coming from</h2>
-                <p className="mt-1 text-sm text-primary/70">
-                  Source mix for the selected {stageData?.stage.label?.toLowerCase() ?? 'funnel stage'}.
-                </p>
-              </div>
-              <span className="rounded-full bg-sky-500/10 px-3 py-1 text-xs font-medium text-sky-800">
-                {formatInt(stageData?.source_breakdown.length ?? 0)} channels
-              </span>
-            </div>
-
-            {stageLoading && <p className="mt-5 text-sm text-primary/65">Loading acquisition data…</p>}
-            {!stageLoading && topSourceBreakdown.length === 0 && (
-              <p className="mt-5 rounded-xl border border-dashed border-primary/20 p-4 text-sm text-primary/65">
-                No attributed sources are available for this stage yet.
-              </p>
-            )}
-            {!stageLoading && topSourceBreakdown.length > 0 && (
-              <div className="mt-5 grid gap-3 lg:grid-cols-2">
-                {topSourceBreakdown.map((item, index) => (
-                  <div key={item.source} className="rounded-2xl border border-primary/10 bg-white/45 p-3">
-                    <div className="flex items-center justify-between gap-3 text-sm">
-                      <span className="font-medium">{item.source}</span>
-                      <span className="text-primary/60">{formatInt(item.count)}</span>
-                    </div>
-                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-primary/8">
-                      <div
-                        className={`h-full rounded-full ${index % 3 === 0 ? 'bg-sky-500' : index % 3 === 1 ? 'bg-emerald-500' : 'bg-amber-500'}`}
-                        style={{ width: `${Math.max(5, Math.round((item.count / maxSourceCount) * 100))}%` }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div id="conversations" className="mt-6 scroll-mt-6 overflow-hidden rounded-2xl border border-primary/15 bg-[#071a13] p-5 text-white">
-            <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
-              <div>
-                <p className="text-xs uppercase tracking-[0.16em] text-emerald-200/65">Conversation intelligence</p>
-                <h2 className="mt-2 text-xl font-semibold">Audited customer conversation review</h2>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-white/65">
-                  Open a real user below to review their newest messages first. Every view requires a business reason and is recorded in the audit log.
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2 text-xs">
-                <span className="rounded-full bg-emerald-300 px-3 py-1.5 font-medium text-[#071a13]">
-                  {canViewConversations ? 'Review enabled' : 'Metadata only'}
-                </span>
-                <a href="#users" className="rounded-full border border-white/20 px-3 py-1.5 text-white/80 hover:border-white/40">
-                  Open user list ↓
-                </a>
-              </div>
-            </div>
-          </div>
-
-          <div id="users" className="mt-6 scroll-mt-6 rounded-2xl border border-primary/15 bg-background p-4 sm:p-5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <h2 className="text-lg font-semibold">Stage Users Drilldown</h2>
-                <p className="mt-1 text-sm text-primary/70">
-                  Click any stage above to view users, source attribution, and payment status details.
-                </p>
-              </div>
-              {selectedStage && (
-                <button
-                  type="button"
-                  className="rounded-xl border border-primary/20 px-3 py-1.5 text-sm text-primary/80 hover:border-primary/35"
-                  onClick={() => {
-                    setSelectedStage(null);
-                    setStageData(null);
-                    setStageSearch('');
-                    setStageError('');
-                  }}
-                >
-                  Clear
-                </button>
-              )}
-            </div>
-
-            {!selectedStage && (
-              <p className="mt-4 rounded-xl border border-dashed border-primary/20 px-4 py-3 text-sm text-primary/70">
-                Select `Signups`, `Payment Opened`, `Paid`, or `WAU` to open the full user list.
-              </p>
-            )}
-
-            {selectedStage && (
-              <div className="mt-4 space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  <div className="rounded-xl border border-primary/12 p-3">
-                    <p className="text-xs uppercase tracking-[0.12em] text-primary/65">Stage</p>
-                    <p className="mt-1 font-semibold">{stageData?.stage.label ?? selectedStage.replace(/_/g, ' ')}</p>
-                  </div>
-                  <div className="rounded-xl border border-primary/12 p-3">
-                    <p className="text-xs uppercase tracking-[0.12em] text-primary/65">Users</p>
-                    <p className="mt-1 font-semibold">
-                      {formatInt(stageData?.stage.user_count ?? stageCards.find((item) => item.key === selectedStage)?.value ?? 0)}
-                    </p>
-                  </div>
-                  <div className="rounded-xl border border-primary/12 p-3">
-                    <p className="text-xs uppercase tracking-[0.12em] text-primary/65">Source Channels</p>
-                    <p className="mt-1 font-semibold">{formatInt(stageData?.source_breakdown.length ?? 0)}</p>
-                  </div>
+                  <span className="rounded-full bg-sky-500/10 px-3 py-1 text-xs font-medium text-sky-800">
+                    {formatInt(stageData?.source_breakdown.length ?? 0)} channels
+                  </span>
                 </div>
 
-                {stageLoading && <p className="text-primary/70">Loading users for selected stage…</p>}
-                {stageError && <p className="text-red-700">{stageError}</p>}
-
-                {!stageLoading && !stageError && stageData && (
-                  <>
-                    {stageData.stage.truncated && (
-                      <p className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                        Showing {formatInt(stageData.stage.users_returned)} of {formatInt(stageData.stage.user_count)} users (limit{' '}
-                        {formatInt(stageData.stage.truncate_limit)}).
-                      </p>
-                    )}
-
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <input
-                        type="search"
-                        value={stageSearch}
-                        onChange={(event) => setStageSearch(event.target.value)}
-                        placeholder="Search by email, source, campaign, country, payment status"
-                        className="w-full sm:max-w-md rounded-xl border border-primary/20 bg-white/50 px-3 py-2 text-sm focus:border-primary/45 focus:outline-none"
-                      />
-                      <p className="text-xs text-primary/65">
-                        Showing {formatInt(filteredStageUsers.length)} of {formatInt(stageData.users.length)} loaded users
-                      </p>
-                    </div>
-
-                    {topSourceBreakdown.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {topSourceBreakdown.map((item) => (
-                          <span
-                            key={item.source}
-                            className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-white/60 px-3 py-1 text-xs"
-                          >
-                            <span className="font-medium">{item.source}</span>
-                            <span className="text-primary/65">{formatInt(item.count)}</span>
-                          </span>
-                        ))}
+                {stageLoading && <p className="mt-5 text-sm text-primary/65">Loading acquisition data…</p>}
+                {!stageLoading && topSourceBreakdown.length === 0 && (
+                  <p className="mt-5 rounded-xl border border-dashed border-primary/20 p-4 text-sm text-primary/65">
+                    No attributed sources are available for this stage yet.
+                  </p>
+                )}
+                {!stageLoading && topSourceBreakdown.length > 0 && (
+                  <div className="mt-5 grid gap-3 lg:grid-cols-2">
+                    {topSourceBreakdown.map((item, index) => (
+                      <div key={item.source} className="rounded-2xl border border-primary/10 bg-white/45 p-3">
+                        <div className="flex items-center justify-between gap-3 text-sm">
+                          <span className="font-medium">{item.source}</span>
+                          <span className="text-primary/60">{formatInt(item.count)}</span>
+                        </div>
+                        <div className="mt-2 h-2 overflow-hidden rounded-full bg-primary/8">
+                          <div
+                            className={`h-full rounded-full ${index % 3 === 0 ? 'bg-sky-500' : index % 3 === 1 ? 'bg-emerald-500' : 'bg-amber-500'}`}
+                            style={{ width: `${Math.max(5, Math.round((item.count / maxSourceCount) * 100))}%` }}
+                          />
+                        </div>
                       </div>
-                    )}
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
-                    <div className="overflow-x-auto rounded-xl border border-primary/12">
-                      <table className="min-w-[1320px] w-full text-sm">
-                        <thead className="bg-primary/5 text-left">
-                          <tr>
-                            <th className="px-3 py-2 font-medium">User</th>
-                            <th className="px-3 py-2 font-medium">Source</th>
-                            <th className="px-3 py-2 font-medium">Campaign</th>
-                            <th className="px-3 py-2 font-medium">Country</th>
-                            <th className="px-3 py-2 font-medium">Signup At</th>
-                            <th className="px-3 py-2 font-medium">Payment Status</th>
-                            <th className="px-3 py-2 font-medium">Plan</th>
-                            <th className="px-3 py-2 font-medium">Amount</th>
-                            <th className="px-3 py-2 font-medium">Opened</th>
-                            <th className="px-3 py-2 font-medium">Paid</th>
-                            <th className="px-3 py-2 font-medium">WAU</th>
-                            <th className="px-3 py-2 font-medium">Messages</th>
-                            <th className="px-3 py-2 font-medium">Last Active</th>
-                            {canViewConversations && <th className="px-3 py-2 font-medium">Conversations</th>}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {filteredStageUsers.length === 0 && (
-                            <tr>
-                              <td colSpan={canViewConversations ? 14 : 13} className="px-3 py-8 text-center text-primary/65">
-                                No users matched this filter.
-                              </td>
-                            </tr>
+            {currentView === 'conversations' && (
+              <div
+                id="conversations"
+                className="mt-6 scroll-mt-6 overflow-hidden rounded-2xl border border-primary/15 bg-[#071a13] p-5 text-white"
+              >
+                <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.16em] text-emerald-200/65">Conversation intelligence</p>
+                    <h2 className="mt-2 text-xl font-semibold">Audited customer conversation review</h2>
+                    <p className="mt-2 max-w-2xl text-sm leading-6 text-white/65">
+                      Open a real user below to review their newest messages first. Every view requires a business
+                      reason and is recorded in the audit log.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    <span className="rounded-full bg-emerald-300 px-3 py-1.5 font-medium text-[#071a13]">
+                      {canViewConversations ? 'Review enabled' : 'Metadata only'}
+                    </span>
+                    <a
+                      href="#users"
+                      className="rounded-full border border-white/20 px-3 py-1.5 text-white/80 hover:border-white/40"
+                    >
+                      Open user list ↓
+                    </a>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {(currentView === 'users' || currentView === 'conversations') && (
+              <div
+                id="users"
+                className="mt-6 scroll-mt-6 rounded-2xl border border-primary/15 bg-background p-4 sm:p-5"
+              >
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <h2 className="text-lg font-semibold">
+                      {currentView === 'conversations' ? 'Choose a user to review' : 'Stage Users Drilldown'}
+                    </h2>
+                    <p className="mt-1 text-sm text-primary/70">
+                      {currentView === 'conversations'
+                        ? 'Find a real user and open their audited conversation history.'
+                        : 'Choose a stage to view users, source attribution, and payment status details.'}
+                    </p>
+                  </div>
+                  {selectedStage && (
+                    <button
+                      type="button"
+                      className="rounded-xl border border-primary/20 px-3 py-1.5 text-sm text-primary/80 hover:border-primary/35"
+                      onClick={() => {
+                        setSelectedStage(null);
+                        setStageData(null);
+                        setStageSearch('');
+                        setStageError('');
+                      }}
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+
+                {!selectedStage && (
+                  <p className="mt-4 rounded-xl border border-dashed border-primary/20 px-4 py-3 text-sm text-primary/70">
+                    Select `Signups`, `Payment Opened`, `Paid`, or `WAU` to open the full user list.
+                  </p>
+                )}
+
+                {selectedStage && (
+                  <div className="mt-4 space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <div className="rounded-xl border border-primary/12 p-3">
+                        <p className="text-xs uppercase tracking-[0.12em] text-primary/65">Stage</p>
+                        <p className="mt-1 font-semibold">
+                          {stageData?.stage.label ?? selectedStage.replace(/_/g, ' ')}
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-primary/12 p-3">
+                        <p className="text-xs uppercase tracking-[0.12em] text-primary/65">Users</p>
+                        <p className="mt-1 font-semibold">
+                          {formatInt(
+                            stageData?.stage.user_count ??
+                              stageCards.find((item) => item.key === selectedStage)?.value ??
+                              0,
                           )}
-                          {filteredStageUsers.map((user) => (
-                            <tr key={user.user_id} className="border-t border-primary/8">
-                              <td className="px-3 py-2 align-top">
-                                <p className="font-medium">{user.name || 'Unknown Name'}</p>
-                                <p className="text-xs text-primary/65">{user.email || '—'}</p>
-                              </td>
-                              <td className="px-3 py-2">{user.source_channel}</td>
-                              <td className="px-3 py-2">{user.campaign || '—'}</td>
-                              <td className="px-3 py-2">{user.country || '—'}</td>
-                              <td className="px-3 py-2">{formatDateTime(user.signup_at)}</td>
-                              <td className="px-3 py-2">{user.payment_status || '—'}</td>
-                              <td className="px-3 py-2">{user.plan_type || '—'}</td>
-                              <td className="px-3 py-2">{formatAmount(user.amount)}</td>
-                              <td className="px-3 py-2">{stageFlag(user.payment_opened)}</td>
-                              <td className="px-3 py-2">{stageFlag(user.paid)}</td>
-                              <td className="px-3 py-2">{stageFlag(user.active)}</td>
-                              <td className="px-3 py-2">{formatInt(user.message_count)}</td>
-                              <td className="px-3 py-2">{formatDateTime(user.last_active_at)}</td>
-                              {canViewConversations && (
-                                <td className="px-3 py-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => openConversations(user)}
-                                    className="whitespace-nowrap rounded-lg border border-primary/20 px-3 py-1.5 text-xs font-medium hover:border-primary/45"
-                                  >
-                                    Review chats
-                                  </button>
-                                </td>
-                              )}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-primary/12 p-3">
+                        <p className="text-xs uppercase tracking-[0.12em] text-primary/65">Source Channels</p>
+                        <p className="mt-1 font-semibold">{formatInt(stageData?.source_breakdown.length ?? 0)}</p>
+                      </div>
                     </div>
-                  </>
+
+                    {stageLoading && <p className="text-primary/70">Loading users for selected stage…</p>}
+                    {stageError && <p className="text-red-700">{stageError}</p>}
+
+                    {!stageLoading && !stageError && stageData && (
+                      <>
+                        {stageData.stage.truncated && (
+                          <p className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                            Showing {formatInt(stageData.stage.users_returned)} of{' '}
+                            {formatInt(stageData.stage.user_count)} users (limit{' '}
+                            {formatInt(stageData.stage.truncate_limit)}).
+                          </p>
+                        )}
+
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <input
+                            type="search"
+                            value={stageSearch}
+                            onChange={(event) => setStageSearch(event.target.value)}
+                            placeholder="Search by email, source, campaign, country, payment status"
+                            className="w-full sm:max-w-md rounded-xl border border-primary/20 bg-white/50 px-3 py-2 text-sm focus:border-primary/45 focus:outline-none"
+                          />
+                          <p className="text-xs text-primary/65">
+                            Showing {formatInt(filteredStageUsers.length)} of {formatInt(stageData.users.length)} loaded
+                            users
+                          </p>
+                        </div>
+
+                        {topSourceBreakdown.length > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {topSourceBreakdown.map((item) => (
+                              <span
+                                key={item.source}
+                                className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-white/60 px-3 py-1 text-xs"
+                              >
+                                <span className="font-medium">{item.source}</span>
+                                <span className="text-primary/65">{formatInt(item.count)}</span>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        <div className="overflow-x-auto rounded-xl border border-primary/12">
+                          <table className="min-w-[1320px] w-full text-sm">
+                            <thead className="bg-primary/5 text-left">
+                              <tr>
+                                <th className="px-3 py-2 font-medium">User</th>
+                                <th className="px-3 py-2 font-medium">Source</th>
+                                <th className="px-3 py-2 font-medium">Campaign</th>
+                                <th className="px-3 py-2 font-medium">Country</th>
+                                <th className="px-3 py-2 font-medium">Signup At</th>
+                                <th className="px-3 py-2 font-medium">Payment Status</th>
+                                <th className="px-3 py-2 font-medium">Plan</th>
+                                <th className="px-3 py-2 font-medium">Amount</th>
+                                <th className="px-3 py-2 font-medium">Opened</th>
+                                <th className="px-3 py-2 font-medium">Paid</th>
+                                <th className="px-3 py-2 font-medium">WAU</th>
+                                <th className="px-3 py-2 font-medium">Messages</th>
+                                <th className="px-3 py-2 font-medium">Last Active</th>
+                                {canViewConversations && <th className="px-3 py-2 font-medium">Conversations</th>}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {filteredStageUsers.length === 0 && (
+                                <tr>
+                                  <td
+                                    colSpan={canViewConversations ? 14 : 13}
+                                    className="px-3 py-8 text-center text-primary/65"
+                                  >
+                                    No users matched this filter.
+                                  </td>
+                                </tr>
+                              )}
+                              {filteredStageUsers.map((user) => (
+                                <tr key={user.user_id} className="border-t border-primary/8">
+                                  <td className="px-3 py-2 align-top">
+                                    <p className="font-medium">{user.name || 'Unknown Name'}</p>
+                                    <p className="text-xs text-primary/65">{user.email || '—'}</p>
+                                  </td>
+                                  <td className="px-3 py-2">{user.source_channel}</td>
+                                  <td className="px-3 py-2">{user.campaign || '—'}</td>
+                                  <td className="px-3 py-2">{user.country || '—'}</td>
+                                  <td className="px-3 py-2">{formatDateTime(user.signup_at)}</td>
+                                  <td className="px-3 py-2">{user.payment_status || '—'}</td>
+                                  <td className="px-3 py-2">{user.plan_type || '—'}</td>
+                                  <td className="px-3 py-2">{formatAmount(user.amount)}</td>
+                                  <td className="px-3 py-2">{stageFlag(user.payment_opened)}</td>
+                                  <td className="px-3 py-2">{stageFlag(user.paid)}</td>
+                                  <td className="px-3 py-2">{stageFlag(user.active)}</td>
+                                  <td className="px-3 py-2">{formatInt(user.message_count)}</td>
+                                  <td className="px-3 py-2">{formatDateTime(user.last_active_at)}</td>
+                                  {canViewConversations && (
+                                    <td className="px-3 py-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => openConversations(user)}
+                                        className="whitespace-nowrap rounded-lg border border-primary/20 px-3 py-1.5 text-xs font-medium hover:border-primary/45"
+                                      >
+                                        Review chats
+                                      </button>
+                                    </td>
+                                  )}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {currentView === 'data-quality' && (
+              <div
+                id="data-quality"
+                className="mt-6 scroll-mt-6 rounded-2xl border border-primary/15 bg-background p-4 sm:p-5"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.16em] text-primary/55">Trust layer</p>
+                    <h2 className="mt-1 text-lg font-semibold">Data Quality &amp; Freshness</h2>
+                  </div>
+                  <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-800">
+                    Live rules applied
+                  </span>
+                </div>
+                <ul className="mt-3 list-disc pl-5 space-y-1 text-sm text-primary/75">
+                  {(data?.notes ?? []).map((note) => (
+                    <li key={note}>{note}</li>
+                  ))}
+                </ul>
+                {data?.generated_at && (
+                  <p className="mt-3 text-xs text-primary/55">Generated at: {data.generated_at}</p>
                 )}
               </div>
             )}
           </div>
-
-          <div id="data-quality" className="mt-6 scroll-mt-6 rounded-2xl border border-primary/15 bg-background p-4 sm:p-5">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <p className="text-xs uppercase tracking-[0.16em] text-primary/55">Trust layer</p>
-                <h2 className="mt-1 text-lg font-semibold">Data Quality &amp; Freshness</h2>
-              </div>
-              <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-800">Live rules applied</span>
-            </div>
-            <ul className="mt-3 list-disc pl-5 space-y-1 text-sm text-primary/75">
-              {(data?.notes ?? []).map((note) => (
-                <li key={note}>{note}</li>
-              ))}
-            </ul>
-            {data?.generated_at && (
-              <p className="mt-3 text-xs text-primary/55">Generated at: {data.generated_at}</p>
-            )}
-          </div>
-        </div>
         </div>
       </div>
 
@@ -1136,7 +1384,9 @@ export default function AnalyticsPage() {
                   {conversationLoading ? 'Loading…' : 'Open audited chat'}
                 </button>
               </div>
-              <p className="mt-2 text-xs text-primary/55">Every access is logged with your identity, the user, time, and reason.</p>
+              <p className="mt-2 text-xs text-primary/55">
+                Every access is logged with your identity, the user, time, and reason.
+              </p>
               {conversationError && <p className="mt-2 text-sm text-red-700">{conversationError}</p>}
             </div>
 
@@ -1174,7 +1424,9 @@ export default function AnalyticsPage() {
                           <span className="font-medium uppercase tracking-wide">{message.content_type}</span>
                           <span>{formatDateTime(message.timestamp)}</span>
                         </div>
-                        <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6">{message.content || '—'}</p>
+                        <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6">
+                          {message.content || '—'}
+                        </p>
                         {(message.model || message.session_id) && (
                           <p className="mt-2 text-[11px] text-primary/45">
                             {[message.model, message.session_id].filter(Boolean).join(' · ')}
