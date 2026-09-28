@@ -1,94 +1,43 @@
-import { NextRequest, NextResponse } from 'next/server';
-import type { SupabaseClient } from '@supabase/supabase-js';
 import { requireAnalyticsPermission } from '@/lib/analyticsAccess';
+import { NextRequest, NextResponse } from 'next/server';
 
-const SUPABASE_URL = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const DEFAULT_ALLOWED_DOMAIN = (process.env.ANALYTICS_ALLOWED_EMAIL_DOMAIN ?? 'himeera.com')
-  .trim()
-  .toLowerCase();
-const EXCLUDED_ANALYTICS_EMAIL_DOMAINS = new Set(
-  (process.env.ANALYTICS_EXCLUDED_EMAIL_DOMAINS ??
-    `example.com,example.net,example.org,example.invalid,invalid,local,localhost,${DEFAULT_ALLOWED_DOMAIN}`)
-    .split(',')
-    .map((value) => value.trim().toLowerCase().replace(/^@/, ''))
-    .filter(Boolean),
-);
-const EXCLUDED_ANALYTICS_EMAILS = new Set(
-  (process.env.ANALYTICS_EXCLUDED_EMAILS ?? '')
-    .split(',')
-    .map((value) => value.trim().toLowerCase())
-    .filter(Boolean),
-);
+const DEFAULT_ALLOWED_DOMAIN = (process.env.ANALYTICS_ALLOWED_EMAIL_DOMAIN ?? 'himeera.com').trim().toLowerCase();
+const EXCLUDED_ANALYTICS_EMAIL_DOMAINS = (
+  process.env.ANALYTICS_EXCLUDED_EMAIL_DOMAINS ??
+  `example.com,example.net,example.org,example.invalid,invalid,local,localhost,${DEFAULT_ALLOWED_DOMAIN}`
+)
+  .split(',')
+  .map((value) => value.trim().toLowerCase().replace(/^@/, ''))
+  .filter(Boolean);
+const EXCLUDED_ANALYTICS_EMAILS = (process.env.ANALYTICS_EXCLUDED_EMAILS ?? '')
+  .split(',')
+  .map((value) => value.trim().toLowerCase())
+  .filter(Boolean);
 const EXCLUDED_ANALYTICS_EMAIL_PREFIXES = (
   process.env.ANALYTICS_EXCLUDED_EMAIL_PREFIXES ?? 'codex-,test-,smoke-,e2e-,qa-'
 )
   .split(',')
   .map((value) => value.trim().toLowerCase())
   .filter(Boolean);
-const EXCLUDED_ANALYTICS_NAME_PREFIXES = (
-  process.env.ANALYTICS_EXCLUDED_NAME_PREFIXES ?? 'codex,memory keyword smoke'
-)
+const EXCLUDED_ANALYTICS_NAME_PREFIXES = (process.env.ANALYTICS_EXCLUDED_NAME_PREFIXES ?? 'codex,memory keyword smoke')
   .split(',')
   .map((value) => value.trim().toLowerCase())
   .filter(Boolean);
-const EXCLUDED_ANALYTICS_ID_FRAGMENTS = (
-  process.env.ANALYTICS_EXCLUDED_ID_FRAGMENTS ?? 'bypass,smoke,codex,test,e2e'
-)
+const EXCLUDED_ANALYTICS_ID_FRAGMENTS = (process.env.ANALYTICS_EXCLUDED_ID_FRAGMENTS ?? 'bypass,smoke,codex,test,e2e')
   .split(',')
   .map((value) => value.trim().toLowerCase())
   .filter(Boolean);
-const BYPASS_COUPON_CODES = new Set(
-  (process.env.ANALYTICS_BYPASS_COUPON_CODES ?? process.env.PAYMENT_BYPASS_CODES ?? 'BYPASS')
-    .split(',')
-    .map((value) => value.trim().toUpperCase())
-    .filter(Boolean),
-);
-const BATCH_SIZE = 1000;
-const USER_FETCH_CHUNK = 500;
+const BYPASS_COUPON_CODES = (process.env.ANALYTICS_BYPASS_COUPON_CODES ?? process.env.PAYMENT_BYPASS_CODES ?? 'BYPASS')
+  .split(',')
+  .map((value) => value.trim().toUpperCase())
+  .filter(Boolean);
 
-const PAYMENT_GRANT_STATUSES = new Set(['paid', 'active', 'success']);
-
-type PaymentRow = {
-  payment_id: string | null;
-  user_id: string | null;
-  payment_status: string | null;
-  plan_type: string | null;
-  payment_date: string | null;
-  created_at: string | null;
-  updated_at: string | null;
-  amount: number | string | null;
-  order_id: string | null;
-  coupon_code: string | null;
-  payment_method: string | null;
+type FunnelSummaryRow = {
+  signups: number | string | null;
+  payment_page_opened: number | string | null;
+  paid: number | string | null;
+  active: number | string | null;
 };
-
-type SignupUserRow = {
-  id?: string | null;
-  auth_id?: string | null;
-  email?: string | null;
-  name?: string | null;
-  deleted?: boolean | null;
-};
-
-type ActivityMessageRow = {
-  user_id: string | null;
-  timestamp: string | null;
-};
-
-function normalizeStatus(status: unknown): string {
-  return String(status ?? '').trim().toLowerCase();
-}
-
-function normalizeCouponCode(couponCode: unknown): string {
-  return String(couponCode ?? '').trim().toUpperCase();
-}
-
-function normalizeAmount(value: unknown): number | null {
-  const parsed = typeof value === 'number' ? value : Number(value);
-  if (!Number.isFinite(parsed) || parsed <= 0) return null;
-  return Math.round(parsed);
-}
 
 function toDateOnly(value: Date): string {
   return value.toISOString().slice(0, 10);
@@ -97,13 +46,11 @@ function toDateOnly(value: Date): string {
 function parseDateParam(value: string | null, fallback: Date): Date {
   if (!value) return fallback;
   const parsed = new Date(`${value}T00:00:00.000Z`);
-  if (Number.isNaN(parsed.getTime())) return fallback;
-  return parsed;
+  return Number.isNaN(parsed.getTime()) ? fallback : parsed;
 }
 
 function toDayStartIsoUtc(date: Date): string {
-  const normalized = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-  return normalized.toISOString();
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())).toISOString();
 }
 
 function addDaysUtc(date: Date, days: number): Date {
@@ -113,241 +60,28 @@ function addDaysUtc(date: Date, days: number): Date {
 }
 
 function conversion(numerator: number, denominator: number): number {
-  if (!denominator || denominator <= 0) return 0;
-  return Number((numerator / denominator).toFixed(4));
+  return denominator > 0 ? Number((numerator / denominator).toFixed(4)) : 0;
 }
 
-function isUuidLike(value: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
-}
-
-function hasExcludedSyntheticId(value: unknown): boolean {
-  const normalized = String(value ?? '').trim().toLowerCase();
-  if (!normalized || isUuidLike(normalized)) return false;
-  return EXCLUDED_ANALYTICS_ID_FRAGMENTS.some((fragment) => normalized.includes(fragment));
-}
-
-function isRealAnalyticsUser(row: SignupUserRow): boolean {
-  if (row.deleted === true) return false;
-
-  if (hasExcludedSyntheticId(row.id)) return false;
-
-  const email = String(row.email ?? '').trim().toLowerCase();
-  const name = String(row.name ?? '').trim().toLowerCase();
-
-  // Analytics only includes identifiable, external accounts. Email-less UUID rows
-  // are typically incomplete auth/test records and must not affect any stage.
-  const emailMatch = email.match(/^([^\s@]+)@([^\s@]+\.[^\s@]+)$/);
-  if (!emailMatch) return false;
-
-  const [, localPart, domain] = emailMatch;
-  if (EXCLUDED_ANALYTICS_EMAILS.has(email)) return false;
-  if (EXCLUDED_ANALYTICS_EMAIL_DOMAINS.has(domain)) return false;
-  if (EXCLUDED_ANALYTICS_EMAIL_PREFIXES.some((prefix) => localPart.startsWith(prefix))) return false;
-  if (/(^|[+._-])(codex|smoke|test|testing|e2e|qa)([+._-]|$)/i.test(localPart)) return false;
-
-  if (name && EXCLUDED_ANALYTICS_NAME_PREFIXES.some((prefix) => name.startsWith(prefix))) return false;
-
-  return true;
-}
-
-function isBypassPayment(payment: PaymentRow): boolean {
-  const couponCode = normalizeCouponCode(payment.coupon_code);
-  if (couponCode && BYPASS_COUPON_CODES.has(couponCode)) return true;
-
-  return [payment.user_id, payment.payment_id, payment.order_id].some((value) =>
-    String(value ?? '').trim().toLowerCase().includes('bypass'),
-  );
-}
-
-function hasPositivePaymentAmount(payment: PaymentRow): boolean {
-  return normalizeAmount(payment.amount) !== null;
-}
-
-function isRealPaymentRecord(payment: PaymentRow): boolean {
-  return !isBypassPayment(payment) && hasPositivePaymentAmount(payment);
-}
-
-function isRealPaymentGrant(payment: PaymentRow): boolean {
-  return PAYMENT_GRANT_STATUSES.has(normalizeStatus(payment.payment_status)) && isRealPaymentRecord(payment);
-}
-
-async function fetchSignupUserIds(
-  supabase: SupabaseClient,
-  fromIso: string,
-  toExclusiveIso: string,
-): Promise<Set<string>> {
-  const userIds = new Set<string>();
-  let offset = 0;
-
-  while (true) {
-    const { data, error } = await supabase
-      .from('users')
-      .select('id, auth_id, email, name, deleted, created_at')
-      .gte('created_at', fromIso)
-      .lt('created_at', toExclusiveIso)
-      .order('created_at', { ascending: true })
-      .range(offset, offset + BATCH_SIZE - 1);
-
-    if (error) throw new Error(`Failed loading signups: ${error.message}`);
-    if (!data || data.length === 0) break;
-
-    for (const row of data as SignupUserRow[]) {
-      if (!isRealAnalyticsUser(row)) continue;
-      const id = typeof row.id === 'string' ? row.id.trim() : '';
-      if (id) userIds.add(id);
-    }
-
-    if (data.length < BATCH_SIZE) break;
-    offset += BATCH_SIZE;
-  }
-
-  return userIds;
-}
-
-function chunkArray<T>(items: T[], chunkSize: number): T[][] {
-  const chunks: T[][] = [];
-  for (let i = 0; i < items.length; i += chunkSize) {
-    chunks.push(items.slice(i, i + chunkSize));
-  }
-  return chunks;
-}
-
-async function fetchRealUserIdsByAuthIds(
-  supabase: SupabaseClient,
-  authIds: string[],
-): Promise<Set<string>> {
-  const userIds = new Set<string>();
-  const uniqueAuthIds = Array.from(new Set(authIds.map((value) => value.trim()).filter(Boolean)));
-
-  for (const chunk of chunkArray(uniqueAuthIds, USER_FETCH_CHUNK)) {
-    const { data, error } = await supabase
-      .from('users')
-      .select('id, auth_id, email, name, deleted, created_at')
-      .in('auth_id', chunk);
-
-    if (error) throw new Error(`Failed loading active users: ${error.message}`);
-
-    for (const row of (data ?? []) as SignupUserRow[]) {
-      if (!isRealAnalyticsUser(row)) continue;
-      const id = typeof row.id === 'string' ? row.id.trim() : '';
-      if (id) userIds.add(id);
-    }
-  }
-
-  return userIds;
-}
-
-async function fetchWeeklyActiveUserIds(
-  supabase: SupabaseClient,
-  fromIso: string,
-  toExclusiveIso: string,
-): Promise<Set<string>> {
-  const activeAuthIds = new Set<string>();
-  let offset = 0;
-
-  while (true) {
-    const { data, error } = await supabase
-      .from('messages')
-      .select('user_id, timestamp')
-      .eq('content_type', 'user')
-      .gte('timestamp', fromIso)
-      .lt('timestamp', toExclusiveIso)
-      .order('timestamp', { ascending: true })
-      .range(offset, offset + BATCH_SIZE - 1);
-
-    if (error) throw new Error(`Failed loading WAU messages: ${error.message}`);
-    if (!data || data.length === 0) break;
-
-    for (const row of data as ActivityMessageRow[]) {
-      const authId = typeof row.user_id === 'string' ? row.user_id.trim() : '';
-      if (authId) activeAuthIds.add(authId);
-    }
-
-    if (data.length < BATCH_SIZE) break;
-    offset += BATCH_SIZE;
-  }
-
-  return fetchRealUserIdsByAuthIds(supabase, Array.from(activeAuthIds));
-}
-
-async function fetchPaymentsByCreatedAtWindow(
-  supabase: SupabaseClient,
-  fromIso: string,
-  toExclusiveIso: string,
-): Promise<PaymentRow[]> {
-  const rows: PaymentRow[] = [];
-  let offset = 0;
-
-  while (true) {
-    const { data, error } = await supabase
-      .from('payments')
-      .select('payment_id, user_id, payment_status, plan_type, payment_date, created_at, updated_at, amount, order_id, coupon_code, payment_method')
-      .gte('created_at', fromIso)
-      .lt('created_at', toExclusiveIso)
-      .order('created_at', { ascending: true })
-      .range(offset, offset + BATCH_SIZE - 1);
-
-    if (error) throw new Error(`Failed loading payments in window: ${error.message}`);
-    if (!data || data.length === 0) break;
-
-    rows.push(...(data as PaymentRow[]));
-
-    if (data.length < BATCH_SIZE) break;
-    offset += BATCH_SIZE;
-  }
-
-  return rows;
-}
-
-async function fetchPaymentOpenedUserIds(
-  supabase: SupabaseClient,
-  fromIso: string,
-  toExclusiveIso: string,
-): Promise<Set<string>> {
-  const authIds = new Set<string>();
-  let offset = 0;
-
-  while (true) {
-    const { data, error } = await supabase
-      .from('analytics_events')
-      .select('user_id, created_at')
-      .eq('event_name', 'payment_page_opened')
-      .gte('created_at', fromIso)
-      .lt('created_at', toExclusiveIso)
-      .order('created_at', { ascending: true })
-      .range(offset, offset + BATCH_SIZE - 1);
-
-    if (error) throw new Error(`Failed loading payment-opened events: ${error.message}`);
-    if (!data?.length) break;
-    for (const row of data) {
-      const authId = String(row.user_id ?? '').trim();
-      if (authId) authIds.add(authId);
-    }
-    if (data.length < BATCH_SIZE) break;
-    offset += BATCH_SIZE;
-  }
-
-  return fetchRealUserIdsByAuthIds(supabase, Array.from(authIds));
+function count(value: number | string | null | undefined): number {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 export async function GET(request: NextRequest) {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    return NextResponse.json({ error: 'Server analytics env is missing' }, { status: 500 });
-  }
-
+  const startedAt = Date.now();
   const auth = await requireAnalyticsPermission(request, 'analytics.view');
   if (!auth.ok) {
     return NextResponse.json({ error: auth.message ?? 'Unauthorized' }, { status: auth.status });
   }
 
   const now = new Date();
-  const defaultFrom = addDaysUtc(now, -30);
   const searchParams = request.nextUrl.searchParams;
-  const fromDate = parseDateParam(searchParams.get('from'), defaultFrom);
+  const fromDate = parseDateParam(searchParams.get('from'), addDaysUtc(now, -30));
   const toDate = parseDateParam(searchParams.get('to'), now);
-
-  const normalizedFromDate = new Date(Date.UTC(fromDate.getUTCFullYear(), fromDate.getUTCMonth(), fromDate.getUTCDate()));
+  const normalizedFromDate = new Date(
+    Date.UTC(fromDate.getUTCFullYear(), fromDate.getUTCMonth(), fromDate.getUTCDate()),
+  );
   const normalizedToDate = new Date(Date.UTC(toDate.getUTCFullYear(), toDate.getUTCMonth(), toDate.getUTCDate()));
 
   if (normalizedToDate < normalizedFromDate) {
@@ -357,32 +91,36 @@ export async function GET(request: NextRequest) {
   const fromIso = toDayStartIsoUtc(normalizedFromDate);
   const toExclusiveIso = toDayStartIsoUtc(addDaysUtc(normalizedToDate, 1));
 
-  const supabase = auth.supabase;
-
   try {
-    const [signupUserIds, paymentOpenedEventUsers, paymentsInWindow, activeUsersInWindow] = await Promise.all([
-      fetchSignupUserIds(supabase, fromIso, toExclusiveIso),
-      fetchPaymentOpenedUserIds(supabase, fromIso, toExclusiveIso),
-      fetchPaymentsByCreatedAtWindow(supabase, fromIso, toExclusiveIso),
-      fetchWeeklyActiveUserIds(supabase, fromIso, toExclusiveIso),
-    ]);
+    const { data, error } = await auth.supabase.rpc('analytics_funnel_summary', {
+      p_from: fromIso,
+      p_to: toExclusiveIso,
+      p_excluded_domains: EXCLUDED_ANALYTICS_EMAIL_DOMAINS,
+      p_excluded_emails: EXCLUDED_ANALYTICS_EMAILS,
+      p_excluded_email_prefixes: EXCLUDED_ANALYTICS_EMAIL_PREFIXES,
+      p_excluded_name_prefixes: EXCLUDED_ANALYTICS_NAME_PREFIXES,
+      p_excluded_id_fragments: EXCLUDED_ANALYTICS_ID_FRAGMENTS,
+      p_bypass_coupon_codes: BYPASS_COUPON_CODES,
+    });
+    if (error) throw error;
 
-    const paymentPageOpenedUsers = new Set(Array.from(paymentOpenedEventUsers).filter((id) => signupUserIds.has(id)));
-    const paidUsers = new Set<string>();
+    const row = ((data ?? [])[0] ?? {}) as FunnelSummaryRow;
+    const signups = count(row.signups);
+    const paymentPageOpened = count(row.payment_page_opened);
+    const paid = count(row.paid);
+    const active = count(row.active);
+    const durationMs = Date.now() - startedAt;
 
-    for (const payment of paymentsInWindow) {
-      const userId = typeof payment.user_id === 'string' ? payment.user_id.trim() : '';
-      if (!userId || !signupUserIds.has(userId)) continue;
-
-      if (isRealPaymentGrant(payment)) {
-        paidUsers.add(userId);
-      }
-    }
-
-    const signups = signupUserIds.size;
-    const paymentPageOpened = paymentPageOpenedUsers.size;
-    const paid = paidUsers.size;
-    const active = activeUsersInWindow.size;
+    console.log(
+      JSON.stringify({
+        level: 'info',
+        message: 'Analytics funnel completed',
+        route: '/api/analytics/funnel',
+        duration_ms: durationMs,
+        from: toDateOnly(normalizedFromDate),
+        to: toDateOnly(normalizedToDate),
+      }),
+    );
 
     return NextResponse.json(
       {
@@ -408,16 +146,29 @@ export async function GET(request: NextRequest) {
           'active is WAU: unique real users with at least one user message in the selected window.',
           'Only users with a valid external email are included; internal, test, automation, incomplete, and BYPASS records are excluded.',
         ],
+        performance: {
+          duration_ms: durationMs,
+          strategy: 'database_aggregate',
+        },
       },
       {
-        status: 200,
         headers: {
-          'Cache-Control': 'no-store',
+          'Cache-Control': 'private, max-age=30, stale-while-revalidate=60',
+          'Server-Timing': `analytics;dur=${durationMs}`,
         },
       },
     );
   } catch (error) {
-    console.error('Analytics funnel API error:', error);
+    const durationMs = Date.now() - startedAt;
+    console.error(
+      JSON.stringify({
+        level: 'error',
+        message: 'Analytics funnel failed',
+        route: '/api/analytics/funnel',
+        duration_ms: durationMs,
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
     return NextResponse.json(
       {
         error: 'Failed to compute analytics funnel',

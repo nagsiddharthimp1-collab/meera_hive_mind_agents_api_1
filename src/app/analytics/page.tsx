@@ -430,7 +430,7 @@ export default function AnalyticsPage() {
   };
 
   useEffect(() => {
-    if (!needsFunnelData || !accessToken || !isAuthorizedViewer) {
+    if (!needsFunnelData || !accessToken) {
       setLoading(false);
       return;
     }
@@ -483,13 +483,12 @@ export default function AnalyticsPage() {
   }, [
     accessToken,
     from,
-    isAuthorizedViewer,
     needsFunnelData,
     to,
   ]);
 
   useEffect(() => {
-    if (!needsStageUsers || !selectedStage || !accessToken || !isAuthorizedViewer) {
+    if (!needsStageUsers || !selectedStage || !accessToken) {
       setStageLoading(false);
       setStageError('');
       setStageData(null);
@@ -544,7 +543,6 @@ export default function AnalyticsPage() {
   }, [
     accessToken,
     from,
-    isAuthorizedViewer,
     needsStageUsers,
     selectedStage,
     to,
@@ -575,7 +573,7 @@ export default function AnalyticsPage() {
   }, [stageData, stageSearch]);
 
   useEffect(() => {
-    if (currentView !== 'links' || !accessToken || !canViewGrowthLinks) return;
+    if (currentView !== 'links' || !accessToken) return;
     let canceled = false;
     const controller = new AbortController();
     const loadLinks = async () => {
@@ -605,14 +603,13 @@ export default function AnalyticsPage() {
     };
   }, [
     accessToken,
-    canViewGrowthLinks,
     currentView,
     from,
     to,
   ]);
 
   useEffect(() => {
-    if (!accessToken || !canManageAccess) return;
+    if (currentView !== 'team-access' || !accessToken || !canManageAccess) return;
     let canceled = false;
     const loadMembers = async () => {
       const response = await fetch('/api/analytics/access', {
@@ -626,7 +623,11 @@ export default function AnalyticsPage() {
     return () => {
       canceled = true;
     };
-  }, [accessToken, canManageAccess]);
+  }, [
+    accessToken,
+    canManageAccess,
+    currentView,
+  ]);
 
   const openConversations = (user: FunnelUserRow) => {
     setConversationUser(user);
