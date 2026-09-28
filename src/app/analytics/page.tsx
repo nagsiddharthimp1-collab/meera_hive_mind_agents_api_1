@@ -108,6 +108,16 @@ const RANGE_OPTIONS: Array<{ key: RangeKey; label: string; daysBack: number }> =
   { key: '1y', label: '1 Year', daysBack: 365 },
 ];
 
+const ANALYTICS_NAV_ITEMS = [
+  { href: '#overview', label: 'Home', short: 'HM', description: 'Executive snapshot' },
+  { href: '#funnel', label: 'Funnel', short: 'FN', description: 'Conversion journey' },
+  { href: '#acquisition', label: 'Acquisition', short: 'AQ', description: 'Sources & campaigns' },
+  { href: '#users', label: 'Users', short: 'US', description: 'User drilldown' },
+  { href: '#conversations', label: 'Conversations', short: 'CH', description: 'Audited reviews' },
+  { href: '#team-access', label: 'Team Access', short: 'TA', description: 'Roles & permissions' },
+  { href: '#data-quality', label: 'Data Quality', short: 'DQ', description: 'Rules & freshness' },
+] as const;
+
 function todayDateString(): string {
   return new Date().toISOString().slice(0, 10);
 }
@@ -161,7 +171,7 @@ export default function AnalyticsPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
   const [data, setData] = useState<FunnelResponse | null>(null);
-  const [selectedStage, setSelectedStage] = useState<FunnelStageKey | null>(null);
+  const [selectedStage, setSelectedStage] = useState<FunnelStageKey | null>('signups');
   const [stageLoading, setStageLoading] = useState<boolean>(false);
   const [stageError, setStageError] = useState<string>('');
   const [stageData, setStageData] = useState<FunnelUsersResponse | null>(null);
@@ -526,11 +536,17 @@ export default function AnalyticsPage() {
   const paid = data?.summary.paid ?? 0;
   const active = data?.summary.active ?? 0;
 
-  const stageCards: Array<{ key: FunnelStageKey; label: string; value: number }> = [
-    { key: 'signups', label: 'Signups', value: signups },
-    { key: 'payment_page_opened', label: 'Payment Opened', value: paymentOpened },
-    { key: 'paid', label: 'Paid', value: paid },
-    { key: 'active', label: 'WAU', value: active },
+  const stageCards: Array<{ key: FunnelStageKey; label: string; value: number; accent: string; hint: string }> = [
+    { key: 'signups', label: 'Signups', value: signups, accent: 'bg-sky-500', hint: 'Audience entering the product' },
+    {
+      key: 'payment_page_opened',
+      label: 'Payment Opened',
+      value: paymentOpened,
+      accent: 'bg-amber-500',
+      hint: 'Users showing purchase intent',
+    },
+    { key: 'paid', label: 'Paid', value: paid, accent: 'bg-emerald-500', hint: 'Successful customer conversion' },
+    { key: 'active', label: 'WAU', value: active, accent: 'bg-violet-500', hint: 'Users active in this window' },
   ];
 
   const maxStep = Math.max(signups, paymentOpened, paid, active, 1);
@@ -573,11 +589,56 @@ export default function AnalyticsPage() {
   ];
 
   const topSourceBreakdown = stageData?.source_breakdown.slice(0, 8) ?? [];
+  const maxSourceCount = Math.max(...topSourceBreakdown.map((item) => item.count), 1);
 
   return (
-    <main className="min-h-[100dvh] bg-background text-primary px-5 py-8 sm:px-8 sm:py-10">
-      <div className="max-w-6xl mx-auto">
-        <div className="bg-card border border-primary/10 rounded-3xl p-5 sm:p-7">
+    <main className="min-h-[100dvh] bg-background px-4 py-4 text-primary sm:px-6 sm:py-6">
+      <div className="mx-auto max-w-[1500px] lg:grid lg:grid-cols-[250px_minmax(0,1fr)] lg:gap-6">
+        <aside className="mb-4 lg:sticky lg:top-6 lg:mb-0 lg:h-[calc(100dvh-3rem)]">
+          <div className="overflow-hidden rounded-3xl bg-[#071a13] text-white shadow-[0_18px_50px_rgba(4,36,24,0.2)] lg:flex lg:h-full lg:flex-col">
+            <div className="border-b border-white/10 px-5 py-5">
+              <div className="flex items-center gap-3">
+                <div className="grid h-10 w-10 place-items-center rounded-2xl bg-emerald-300 font-semibold text-[#071a13]">M</div>
+                <div>
+                  <p className="text-sm font-semibold">Meera Analytics</p>
+                  <p className="text-xs text-white/55">Decision workspace</p>
+                </div>
+              </div>
+            </div>
+
+            <nav aria-label="Analytics sections" className="flex gap-2 overflow-x-auto p-3 lg:flex-1 lg:flex-col lg:overflow-y-auto">
+              {ANALYTICS_NAV_ITEMS.filter((item) => canManageAccess || item.href !== '#team-access').map((item, index) => (
+                <a
+                  key={item.href}
+                  href={item.href}
+                  aria-current={index === 0 ? 'page' : undefined}
+                  className={`group flex min-w-max items-center gap-3 rounded-2xl px-3 py-2.5 text-sm transition lg:min-w-0 ${
+                    index === 0 ? 'bg-white/12 text-white' : 'text-white/68 hover:bg-white/8 hover:text-white'
+                  }`}
+                >
+                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-white/10 text-[10px] font-semibold tracking-wider group-hover:bg-emerald-300 group-hover:text-[#071a13]">
+                    {item.short}
+                  </span>
+                  <span>
+                    <span className="block font-medium">{item.label}</span>
+                    <span className="hidden text-[11px] text-white/45 lg:block">{item.description}</span>
+                  </span>
+                </a>
+              ))}
+            </nav>
+
+            <div className="hidden border-t border-white/10 p-4 lg:block">
+              <div className="rounded-2xl bg-white/6 p-3">
+                <p className="text-[10px] uppercase tracking-[0.16em] text-emerald-200/70">Signed in</p>
+                <p className="mt-1 truncate text-xs text-white/80">{accessProfile?.email}</p>
+                <p className="mt-1 text-[11px] capitalize text-white/45">{accessProfile?.role.replace(/_/g, ' ')}</p>
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        <div className="min-w-0">
+        <div id="overview" className="scroll-mt-6 rounded-3xl border border-primary/10 bg-card p-5 sm:p-7">
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
               <p className="text-xs uppercase tracking-[0.2em] text-primary/60">himeera.com/analytics</p>
@@ -652,7 +713,7 @@ export default function AnalyticsPage() {
             </div>
           </div>
 
-          <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+          <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {stageCards.map((card) => {
               const isSelected = selectedStage === card.key;
               return (
@@ -663,16 +724,17 @@ export default function AnalyticsPage() {
                     setSelectedStage(card.key);
                     setStageSearch('');
                   }}
-                  className={`rounded-2xl border bg-background p-4 text-left transition ${
+                  className={`relative overflow-hidden rounded-2xl border bg-background p-4 text-left transition ${
                     isSelected
                       ? 'border-primary/60 shadow-[0_0_0_1px_rgba(15,73,49,0.35)_inset]'
                       : 'border-primary/15 hover:border-primary/30'
                   }`}
                 >
+                  <span className={`absolute inset-x-0 top-0 h-1 ${card.accent}`} />
                   <p className="text-xs text-primary/70 uppercase tracking-[0.16em]">{card.label}</p>
                   <p className="text-3xl font-semibold mt-2">{formatInt(card.value)}</p>
                   <p className="mt-2 text-xs text-primary/65">
-                    {isSelected ? 'Selected for user details' : 'Click to view users and source'}
+                    {isSelected ? 'Selected · details loaded below' : card.hint}
                   </p>
                 </button>
               );
@@ -680,7 +742,7 @@ export default function AnalyticsPage() {
           </div>
 
           {canManageAccess && (
-            <div className="mt-6 rounded-2xl border border-primary/15 bg-background p-4 sm:p-5">
+            <div id="team-access" className="mt-6 scroll-mt-6 rounded-2xl border border-primary/15 bg-background p-4 sm:p-5">
               <div>
                 <h2 className="text-lg font-semibold">Team Access</h2>
                 <p className="mt-1 text-sm text-primary/70">
@@ -743,7 +805,7 @@ export default function AnalyticsPage() {
             </div>
           )}
 
-          <div className="mt-6 rounded-2xl border border-primary/15 bg-background p-4 sm:p-5">
+          <div id="funnel" className="mt-6 scroll-mt-6 rounded-2xl border border-primary/15 bg-background p-4 sm:p-5">
             <h2 className="text-lg font-semibold">Funnel Breakdown</h2>
             {loading && <p className="mt-4 text-primary/70">Loading analytics…</p>}
             {error && <p className="mt-4 text-red-700">{error}</p>}
@@ -790,7 +852,67 @@ export default function AnalyticsPage() {
             )}
           </div>
 
-          <div className="mt-6 rounded-2xl border border-primary/15 bg-background p-4 sm:p-5">
+          <div id="acquisition" className="mt-6 scroll-mt-6 rounded-2xl border border-primary/15 bg-background p-4 sm:p-5">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.16em] text-primary/55">Acquisition intelligence</p>
+                <h2 className="mt-1 text-lg font-semibold">Where users are coming from</h2>
+                <p className="mt-1 text-sm text-primary/70">
+                  Source mix for the selected {stageData?.stage.label?.toLowerCase() ?? 'funnel stage'}.
+                </p>
+              </div>
+              <span className="rounded-full bg-sky-500/10 px-3 py-1 text-xs font-medium text-sky-800">
+                {formatInt(stageData?.source_breakdown.length ?? 0)} channels
+              </span>
+            </div>
+
+            {stageLoading && <p className="mt-5 text-sm text-primary/65">Loading acquisition data…</p>}
+            {!stageLoading && topSourceBreakdown.length === 0 && (
+              <p className="mt-5 rounded-xl border border-dashed border-primary/20 p-4 text-sm text-primary/65">
+                No attributed sources are available for this stage yet.
+              </p>
+            )}
+            {!stageLoading && topSourceBreakdown.length > 0 && (
+              <div className="mt-5 grid gap-3 lg:grid-cols-2">
+                {topSourceBreakdown.map((item, index) => (
+                  <div key={item.source} className="rounded-2xl border border-primary/10 bg-white/45 p-3">
+                    <div className="flex items-center justify-between gap-3 text-sm">
+                      <span className="font-medium">{item.source}</span>
+                      <span className="text-primary/60">{formatInt(item.count)}</span>
+                    </div>
+                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-primary/8">
+                      <div
+                        className={`h-full rounded-full ${index % 3 === 0 ? 'bg-sky-500' : index % 3 === 1 ? 'bg-emerald-500' : 'bg-amber-500'}`}
+                        style={{ width: `${Math.max(5, Math.round((item.count / maxSourceCount) * 100))}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div id="conversations" className="mt-6 scroll-mt-6 overflow-hidden rounded-2xl border border-primary/15 bg-[#071a13] p-5 text-white">
+            <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+              <div>
+                <p className="text-xs uppercase tracking-[0.16em] text-emerald-200/65">Conversation intelligence</p>
+                <h2 className="mt-2 text-xl font-semibold">Audited customer conversation review</h2>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-white/65">
+                  Open a real user below to review their newest messages first. Every view requires a business reason and is recorded in the audit log.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2 text-xs">
+                <span className="rounded-full bg-emerald-300 px-3 py-1.5 font-medium text-[#071a13]">
+                  {canViewConversations ? 'Review enabled' : 'Metadata only'}
+                </span>
+                <a href="#users" className="rounded-full border border-white/20 px-3 py-1.5 text-white/80 hover:border-white/40">
+                  Open user list ↓
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <div id="users" className="mt-6 scroll-mt-6 rounded-2xl border border-primary/15 bg-background p-4 sm:p-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <h2 className="text-lg font-semibold">Stage Users Drilldown</h2>
@@ -946,8 +1068,14 @@ export default function AnalyticsPage() {
             )}
           </div>
 
-          <div className="mt-6 rounded-2xl border border-primary/15 bg-background p-4 sm:p-5">
-            <h2 className="text-lg font-semibold">Notes</h2>
+          <div id="data-quality" className="mt-6 scroll-mt-6 rounded-2xl border border-primary/15 bg-background p-4 sm:p-5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-xs uppercase tracking-[0.16em] text-primary/55">Trust layer</p>
+                <h2 className="mt-1 text-lg font-semibold">Data Quality &amp; Freshness</h2>
+              </div>
+              <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-800">Live rules applied</span>
+            </div>
             <ul className="mt-3 list-disc pl-5 space-y-1 text-sm text-primary/75">
               {(data?.notes ?? []).map((note) => (
                 <li key={note}>{note}</li>
@@ -957,6 +1085,7 @@ export default function AnalyticsPage() {
               <p className="mt-3 text-xs text-primary/55">Generated at: {data.generated_at}</p>
             )}
           </div>
+        </div>
         </div>
       </div>
 
