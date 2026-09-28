@@ -1,6 +1,6 @@
-import type { NextRequest } from 'next/server';
-import type { SupabaseClient, User } from '@supabase/supabase-js';
 import { requireAuthenticatedUser } from '@/lib/meeraServer';
+import type { SupabaseClient, User } from '@supabase/supabase-js';
+import type { NextRequest } from 'next/server';
 
 export type AnalyticsRole = 'owner' | 'product_growth' | 'analyst' | 'support' | 'internal_viewer';
 export type AnalyticsPermission =
@@ -10,6 +10,8 @@ export type AnalyticsPermission =
   | 'conversations.view_metadata'
   | 'conversations.view_redacted'
   | 'conversations.view_full'
+  | 'growth_links.view'
+  | 'growth_links.manage'
   | 'access.manage';
 
 const ROLE_PERMISSIONS: Record<AnalyticsRole, AnalyticsPermission[]> = {
@@ -20,6 +22,8 @@ const ROLE_PERMISSIONS: Record<AnalyticsRole, AnalyticsPermission[]> = {
     'conversations.view_metadata',
     'conversations.view_redacted',
     'conversations.view_full',
+    'growth_links.view',
+    'growth_links.manage',
     'access.manage',
   ],
   product_growth: [
@@ -29,8 +33,15 @@ const ROLE_PERMISSIONS: Record<AnalyticsRole, AnalyticsPermission[]> = {
     'conversations.view_metadata',
     'conversations.view_redacted',
     'conversations.view_full',
+    'growth_links.view',
+    'growth_links.manage',
   ],
-  analyst: ['analytics.view', 'users.list', 'users.view_pii'],
+  analyst: [
+    'analytics.view',
+    'users.list',
+    'users.view_pii',
+    'growth_links.view',
+  ],
   support: [
     'analytics.view',
     'users.list',
@@ -38,7 +49,11 @@ const ROLE_PERMISSIONS: Record<AnalyticsRole, AnalyticsPermission[]> = {
     'conversations.view_metadata',
     'conversations.view_redacted',
   ],
-  internal_viewer: ['analytics.view', 'users.list', 'users.view_pii'],
+  internal_viewer: [
+    'analytics.view',
+    'users.list',
+    'users.view_pii',
+  ],
 };
 
 type AuthorizedAnalyticsUser = {
@@ -57,7 +72,11 @@ type UnauthorizedAnalyticsUser = {
 };
 
 function isInternalEmail(email: string): boolean {
-  const allowedDomain = (process.env.MEERA_ADMIN_EMAIL_DOMAIN ?? process.env.ANALYTICS_ALLOWED_EMAIL_DOMAIN ?? 'himeera.com')
+  const allowedDomain = (
+    process.env.MEERA_ADMIN_EMAIL_DOMAIN ??
+    process.env.ANALYTICS_ALLOWED_EMAIL_DOMAIN ??
+    'himeera.com'
+  )
     .trim()
     .toLowerCase()
     .replace(/^@/, '');
@@ -71,7 +90,9 @@ export async function requireAnalyticsPermission(
   const auth = await requireAuthenticatedUser(request);
   if (!auth.ok) return auth;
 
-  const email = String(auth.user.email ?? '').trim().toLowerCase();
+  const email = String(auth.user.email ?? '')
+    .trim()
+    .toLowerCase();
   if (!email) return { ok: false, status: 403, message: 'Analytics access requires an email address.' };
 
   const { data: accessRow, error } = await auth.supabase

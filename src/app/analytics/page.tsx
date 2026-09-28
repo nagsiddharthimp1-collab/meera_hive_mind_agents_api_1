@@ -99,27 +99,54 @@ type AccessMember = {
   permissions: string[];
 };
 
-type RangeKey = '1h' | '1d' | '1w' | '1m' | '1y';
+type GrowthLink = {
+  id: string;
+  slug: string;
+  name: string;
+  destination_path: string;
+  utm_source: string;
+  utm_medium: string;
+  utm_campaign: string;
+  active: boolean;
+  expires_at: string | null;
+  created_by_email: string;
+  created_at: string;
+  share_url: string;
+  metrics: {
+    clicks: number;
+    unique_visitors: number;
+    signups: number;
+    payment_opened: number;
+    paid: number;
+    revenue: number;
+    click_to_signup: number;
+  };
+};
 
-const RANGE_OPTIONS: Array<{ key: RangeKey; label: string; daysBack: number }> = [
+type RangeKey = '1h' | '1d' | '1w' | '1m' | '1y' | 'lifetime';
+
+const RANGE_OPTIONS: Array<{ key: RangeKey; label: string; daysBack: number | null }> = [
   { key: '1h', label: '1 Hour', daysBack: 0 },
   { key: '1d', label: '1 Day', daysBack: 1 },
   { key: '1w', label: '1 Week', daysBack: 7 },
   { key: '1m', label: '1 Month', daysBack: 30 },
   { key: '1y', label: '1 Year', daysBack: 365 },
+  { key: 'lifetime', label: 'Lifetime', daysBack: null },
 ];
 
 const ANALYTICS_NAV_ITEMS = [
   { href: '/analytics', label: 'Home', short: 'HM', description: 'Executive snapshot' },
   { href: '/analytics/funnel', label: 'Funnel', short: 'FN', description: 'Conversion journey' },
   { href: '/analytics/acquisition', label: 'Acquisition', short: 'AQ', description: 'Sources & campaigns' },
+  { href: '/analytics/links', label: 'Growth Links', short: 'GL', description: 'Create & measure links' },
   { href: '/analytics/users', label: 'Users', short: 'US', description: 'User drilldown' },
   { href: '/analytics/conversations', label: 'Conversations', short: 'CH', description: 'Audited reviews' },
   { href: '/analytics/team-access', label: 'Team Access', short: 'TA', description: 'Roles & permissions' },
   { href: '/analytics/data-quality', label: 'Data Quality', short: 'DQ', description: 'Rules & freshness' },
 ] as const;
 
-type AnalyticsView = 'home' | 'funnel' | 'acquisition' | 'users' | 'conversations' | 'team-access' | 'data-quality';
+type AnalyticsView =
+  'home' | 'funnel' | 'acquisition' | 'links' | 'users' | 'conversations' | 'team-access' | 'data-quality';
 
 const PAGE_META: Record<AnalyticsView, { eyebrow: string; title: string; description: string }> = {
   home: {
@@ -136,6 +163,11 @@ const PAGE_META: Record<AnalyticsView, { eyebrow: string; title: string; descrip
     eyebrow: 'Growth intelligence',
     title: 'Acquisition channels',
     description: 'Understand which sources and campaigns bring users into each stage.',
+  },
+  links: {
+    eyebrow: 'Growth operations',
+    title: 'Growth link builder',
+    description: 'Create trackable first-party links and measure the journey from click to paid customer.',
   },
   users: {
     eyebrow: 'Customer intelligence',
@@ -164,6 +196,7 @@ function resolveAnalyticsView(pathname: string): AnalyticsView {
   if (
     segment === 'funnel' ||
     segment === 'acquisition' ||
+    segment === 'links' ||
     segment === 'users' ||
     segment === 'conversations' ||
     segment === 'team-access' ||
@@ -246,6 +279,18 @@ export default function AnalyticsPage() {
   const [memberRole, setMemberRole] = useState<AccessMember['role']>('product_growth');
   const [memberSaving, setMemberSaving] = useState<boolean>(false);
   const [memberStatus, setMemberStatus] = useState<string>('');
+  const [growthLinks, setGrowthLinks] = useState<GrowthLink[]>([]);
+  const [growthLinksLoading, setGrowthLinksLoading] = useState<boolean>(false);
+  const [growthLinkStatus, setGrowthLinkStatus] = useState<string>('');
+  const [growthLinkSaving, setGrowthLinkSaving] = useState<boolean>(false);
+  const [growthLinkForm, setGrowthLinkForm] = useState({
+    name: '',
+    destination_path: '/',
+    utm_source: '',
+    utm_medium: 'shared-link',
+    utm_campaign: '',
+    expires_at: '',
+  });
   const rangeMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -323,7 +368,9 @@ export default function AnalyticsPage() {
   const isAuthorizedViewer = accessProfile?.permissions.includes('analytics.view') === true;
   const canViewConversations = accessProfile?.permissions.includes('conversations.view_metadata') === true;
   const canManageAccess = accessProfile?.permissions.includes('access.manage') === true;
-  const needsFunnelData = currentView !== 'team-access';
+  const canViewGrowthLinks = accessProfile?.permissions.includes('growth_links.view') === true;
+  const canManageGrowthLinks = accessProfile?.permissions.includes('growth_links.manage') === true;
+  const needsFunnelData = currentView !== 'team-access' && currentView !== 'links';
   const needsStageUsers = currentView === 'acquisition' || currentView === 'users' || currentView === 'conversations';
 
   const selectedRangeOption = useMemo(
@@ -355,12 +402,26 @@ export default function AnalyticsPage() {
     };
   }, [isRangeMenuOpen]);
 
-  const applyRange = (nextRange: RangeKey) => {
+  const applyRange = async (nextRange: RangeKey) => {
     const option = RANGE_OPTIONS.find((item) => item.key === nextRange);
     if (!option) return;
 
     const nextTo = todayDateString();
-    const nextFrom = option.daysBack === 0 ? nextTo : dateDaysAgo(option.daysBack);
+    let nextFrom = nextTo;
+    if (option.daysBack === null) {
+      const response = await fetch('/api/analytics/range', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        cache: 'no-store',
+      });
+      const body = (await response.json().catch(() => null)) as { from?: string; error?: string } | null;
+      if (!response.ok || !body?.from) {
+        setError(body?.error ?? 'Unable to load the lifetime range.');
+        return;
+      }
+      nextFrom = body.from;
+    } else {
+      nextFrom = option.daysBack === 0 ? nextTo : dateDaysAgo(option.daysBack);
+    }
 
     setSelectedRange(nextRange);
     setFrom(nextFrom);
@@ -514,6 +575,43 @@ export default function AnalyticsPage() {
   }, [stageData, stageSearch]);
 
   useEffect(() => {
+    if (currentView !== 'links' || !accessToken || !canViewGrowthLinks) return;
+    let canceled = false;
+    const controller = new AbortController();
+    const loadLinks = async () => {
+      setGrowthLinksLoading(true);
+      setGrowthLinkStatus('');
+      const params = new URLSearchParams({ from, to });
+      try {
+        const response = await fetch(`/api/analytics/growth-links?${params.toString()}`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          cache: 'no-store',
+          signal: controller.signal,
+        });
+        const body = (await response.json().catch(() => null)) as { links?: GrowthLink[]; error?: string } | null;
+        if (!response.ok || !body?.links) throw new Error(body?.error ?? 'Unable to load growth links.');
+        if (!canceled) setGrowthLinks(body.links);
+      } catch (err) {
+        if (!canceled && !controller.signal.aborted)
+          setGrowthLinkStatus(err instanceof Error ? err.message : String(err));
+      } finally {
+        if (!canceled) setGrowthLinksLoading(false);
+      }
+    };
+    void loadLinks();
+    return () => {
+      canceled = true;
+      controller.abort();
+    };
+  }, [
+    accessToken,
+    canViewGrowthLinks,
+    currentView,
+    from,
+    to,
+  ]);
+
+  useEffect(() => {
     if (!accessToken || !canManageAccess) return;
     let canceled = false;
     const loadMembers = async () => {
@@ -579,6 +677,76 @@ export default function AnalyticsPage() {
     } finally {
       setMemberSaving(false);
     }
+  };
+
+  const createGrowthLink = async () => {
+    if (!accessToken || !canManageGrowthLinks) return;
+    setGrowthLinkSaving(true);
+    setGrowthLinkStatus('');
+    try {
+      const response = await fetch('/api/analytics/growth-links', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(growthLinkForm),
+      });
+      const body = (await response.json().catch(() => null)) as
+        (Omit<GrowthLink, 'metrics'> & { error?: string }) | null;
+      if (!response.ok || !body) throw new Error(body?.error ?? 'Unable to create growth link.');
+      const created: GrowthLink = {
+        ...body,
+        metrics: {
+          clicks: 0,
+          unique_visitors: 0,
+          signups: 0,
+          payment_opened: 0,
+          paid: 0,
+          revenue: 0,
+          click_to_signup: 0,
+        },
+      };
+      setGrowthLinks((current) => [created, ...current]);
+      setGrowthLinkForm({
+        name: '',
+        destination_path: '/',
+        utm_source: '',
+        utm_medium: 'shared-link',
+        utm_campaign: '',
+        expires_at: '',
+      });
+      setGrowthLinkStatus('Growth link created and ready to share.');
+    } catch (err) {
+      setGrowthLinkStatus(err instanceof Error ? err.message : String(err));
+    } finally {
+      setGrowthLinkSaving(false);
+    }
+  };
+
+  const toggleGrowthLink = async (link: GrowthLink) => {
+    if (!accessToken || !canManageGrowthLinks) return;
+    setGrowthLinkSaving(true);
+    setGrowthLinkStatus('');
+    try {
+      const response = await fetch('/api/analytics/growth-links', {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: link.id, active: !link.active }),
+      });
+      const body = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) throw new Error(body?.error ?? 'Unable to update growth link.');
+      setGrowthLinks((current) =>
+        current.map((item) => (item.id === link.id ? { ...item, active: !item.active } : item)),
+      );
+      setGrowthLinkStatus(`${link.name} is now ${link.active ? 'inactive' : 'active'}.`);
+    } catch (err) {
+      setGrowthLinkStatus(err instanceof Error ? err.message : String(err));
+    } finally {
+      setGrowthLinkSaving(false);
+    }
+  };
+
+  const copyGrowthLink = async (link: GrowthLink) => {
+    await navigator.clipboard.writeText(link.share_url);
+    setGrowthLinkStatus(`Copied ${link.name}.`);
   };
 
   if (!accessToken) {
@@ -679,6 +847,15 @@ export default function AnalyticsPage() {
 
   const topSourceBreakdown = stageData?.source_breakdown.slice(0, 8) ?? [];
   const maxSourceCount = Math.max(...topSourceBreakdown.map((item) => item.count), 1);
+  const growthTotals = growthLinks.reduce(
+    (totals, link) => ({
+      clicks: totals.clicks + link.metrics.clicks,
+      signups: totals.signups + link.metrics.signups,
+      paid: totals.paid + link.metrics.paid,
+      revenue: totals.revenue + link.metrics.revenue,
+    }),
+    { clicks: 0, signups: 0, paid: 0, revenue: 0 },
+  );
 
   return (
     <main className="min-h-[100dvh] bg-background px-4 py-4 text-primary sm:px-6 sm:py-6">
@@ -728,35 +905,37 @@ export default function AnalyticsPage() {
             </div>
 
             <nav aria-label="Analytics sections" className="flex flex-1 flex-col gap-2 overflow-y-auto p-3">
-              {ANALYTICS_NAV_ITEMS.filter((item) => canManageAccess || item.href !== '/analytics/team-access').map(
-                (item) => {
-                  const isCurrent = pathname === item.href;
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      aria-current={isCurrent ? 'page' : undefined}
-                      title={!sidebarOpen ? item.label : undefined}
-                      onClick={() => {
-                        if (window.innerWidth < 1024) toggleSidebar();
-                      }}
-                      className={`group flex items-center rounded-2xl py-2.5 text-sm transition ${
-                        sidebarOpen ? 'gap-3 px-3' : 'justify-center px-2'
-                      } ${isCurrent ? 'bg-white/12 text-white' : 'text-white/68 hover:bg-white/8 hover:text-white'}`}
-                    >
-                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-white/10 text-[10px] font-semibold tracking-wider group-hover:bg-emerald-300 group-hover:text-[#071a13]">
-                        {item.short}
+              {ANALYTICS_NAV_ITEMS.filter(
+                (item) =>
+                  (canManageAccess || item.href !== '/analytics/team-access') &&
+                  (canViewGrowthLinks || item.href !== '/analytics/links'),
+              ).map((item) => {
+                const isCurrent = pathname === item.href;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    aria-current={isCurrent ? 'page' : undefined}
+                    title={!sidebarOpen ? item.label : undefined}
+                    onClick={() => {
+                      if (window.innerWidth < 1024) toggleSidebar();
+                    }}
+                    className={`group flex items-center rounded-2xl py-2.5 text-sm transition ${
+                      sidebarOpen ? 'gap-3 px-3' : 'justify-center px-2'
+                    } ${isCurrent ? 'bg-white/12 text-white' : 'text-white/68 hover:bg-white/8 hover:text-white'}`}
+                  >
+                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-white/10 text-[10px] font-semibold tracking-wider group-hover:bg-emerald-300 group-hover:text-[#071a13]">
+                      {item.short}
+                    </span>
+                    {sidebarOpen && (
+                      <span className="min-w-0">
+                        <span className="block font-medium">{item.label}</span>
+                        <span className="block text-[11px] text-white/45">{item.description}</span>
                       </span>
-                      {sidebarOpen && (
-                        <span className="min-w-0">
-                          <span className="block font-medium">{item.label}</span>
-                          <span className="block text-[11px] text-white/45">{item.description}</span>
-                        </span>
-                      )}
-                    </Link>
-                  );
-                },
-              )}
+                    )}
+                  </Link>
+                );
+              })}
             </nav>
 
             {sidebarOpen && (
@@ -832,7 +1011,7 @@ export default function AnalyticsPage() {
                                   ? 'bg-white/12 text-white'
                                   : 'text-white/80 hover:bg-white/8 hover:text-white'
                               }`}
-                              onClick={() => applyRange(option.key)}
+                              onClick={() => void applyRange(option.key)}
                             >
                               <span>{option.label}</span>
                               {isSelected && (
@@ -907,7 +1086,10 @@ export default function AnalyticsPage() {
                 </div>
                 <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                   {ANALYTICS_NAV_ITEMS.filter(
-                    (item) => item.href !== '/analytics' && (canManageAccess || item.href !== '/analytics/team-access'),
+                    (item) =>
+                      item.href !== '/analytics' &&
+                      (canManageAccess || item.href !== '/analytics/team-access') &&
+                      (canViewGrowthLinks || item.href !== '/analytics/links'),
                   ).map((item) => (
                     <Link
                       key={item.href}
@@ -1004,6 +1186,202 @@ export default function AnalyticsPage() {
               <div className="mt-6 rounded-2xl border border-amber-300 bg-amber-50 p-5 text-amber-900">
                 <h2 className="font-semibold">Owner access required</h2>
                 <p className="mt-1 text-sm">Only analytics owners can change team roles and permissions.</p>
+              </div>
+            )}
+
+            {currentView === 'links' && canViewGrowthLinks && (
+              <div className="mt-6 space-y-6">
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  {[
+                    [
+                      'Clicks',
+                      growthTotals.clicks,
+                      'bg-sky-500',
+                    ],
+                    [
+                      'Attributed signups',
+                      growthTotals.signups,
+                      'bg-violet-500',
+                    ],
+                    [
+                      'Paid customers',
+                      growthTotals.paid,
+                      'bg-emerald-500',
+                    ],
+                    [
+                      'Revenue',
+                      `₹${formatInt(growthTotals.revenue)}`,
+                      'bg-amber-500',
+                    ],
+                  ].map(
+                    ([
+                      label,
+                      value,
+                      accent,
+                    ]) => (
+                      <div
+                        key={String(label)}
+                        className="relative overflow-hidden rounded-2xl border border-primary/12 bg-background p-4"
+                      >
+                        <span className={`absolute inset-x-0 top-0 h-1 ${accent}`} />
+                        <p className="text-xs uppercase tracking-[0.14em] text-primary/55">{label}</p>
+                        <p className="mt-2 text-2xl font-semibold">
+                          {typeof value === 'number' ? formatInt(value) : value}
+                        </p>
+                      </div>
+                    ),
+                  )}
+                </div>
+
+                {canManageGrowthLinks && (
+                  <div className="rounded-2xl border border-primary/15 bg-background p-4 sm:p-5">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.16em] text-primary/55">New campaign</p>
+                      <h2 className="mt-1 text-lg font-semibold">Create a trackable link</h2>
+                      <p className="mt-1 text-sm text-primary/65">
+                        Links stay on himeera.com and attribute clicks through signup and payment.
+                      </p>
+                    </div>
+                    <div className="mt-4 grid gap-3 md:grid-cols-2">
+                      <input
+                        value={growthLinkForm.name}
+                        onChange={(event) => setGrowthLinkForm((form) => ({ ...form, name: event.target.value }))}
+                        placeholder="Campaign name"
+                        className="rounded-xl border border-primary/20 bg-white/50 px-3 py-2 text-sm focus:border-primary/45 focus:outline-none"
+                      />
+                      <input
+                        value={growthLinkForm.destination_path}
+                        onChange={(event) =>
+                          setGrowthLinkForm((form) => ({ ...form, destination_path: event.target.value }))
+                        }
+                        placeholder="Destination, e.g. / or /?offer=launch"
+                        className="rounded-xl border border-primary/20 bg-white/50 px-3 py-2 text-sm focus:border-primary/45 focus:outline-none"
+                      />
+                      <input
+                        value={growthLinkForm.utm_source}
+                        onChange={(event) => setGrowthLinkForm((form) => ({ ...form, utm_source: event.target.value }))}
+                        placeholder="Source, e.g. linkedin"
+                        className="rounded-xl border border-primary/20 bg-white/50 px-3 py-2 text-sm focus:border-primary/45 focus:outline-none"
+                      />
+                      <input
+                        value={growthLinkForm.utm_medium}
+                        onChange={(event) => setGrowthLinkForm((form) => ({ ...form, utm_medium: event.target.value }))}
+                        placeholder="Medium, e.g. social"
+                        className="rounded-xl border border-primary/20 bg-white/50 px-3 py-2 text-sm focus:border-primary/45 focus:outline-none"
+                      />
+                      <input
+                        value={growthLinkForm.utm_campaign}
+                        onChange={(event) =>
+                          setGrowthLinkForm((form) => ({ ...form, utm_campaign: event.target.value }))
+                        }
+                        placeholder="UTM campaign (defaults to name)"
+                        className="rounded-xl border border-primary/20 bg-white/50 px-3 py-2 text-sm focus:border-primary/45 focus:outline-none"
+                      />
+                      <input
+                        type="datetime-local"
+                        value={growthLinkForm.expires_at}
+                        onChange={(event) => setGrowthLinkForm((form) => ({ ...form, expires_at: event.target.value }))}
+                        aria-label="Optional link expiry"
+                        className="rounded-xl border border-primary/20 bg-white/50 px-3 py-2 text-sm focus:border-primary/45 focus:outline-none"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      disabled={growthLinkSaving || !growthLinkForm.name.trim() || !growthLinkForm.utm_source.trim()}
+                      onClick={() => void createGrowthLink()}
+                      className="mt-4 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-background disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {growthLinkSaving ? 'Creating…' : 'Create growth link'}
+                    </button>
+                  </div>
+                )}
+
+                <div className="rounded-2xl border border-primary/15 bg-background p-4 sm:p-5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <h2 className="text-lg font-semibold">Campaign links</h2>
+                      <p className="mt-1 text-sm text-primary/65">Performance reflects the selected date window.</p>
+                    </div>
+                    <span className="rounded-full bg-primary/8 px-3 py-1 text-xs">
+                      {formatInt(growthLinks.length)} links
+                    </span>
+                  </div>
+                  {growthLinkStatus && <p className="mt-3 text-sm text-primary/70">{growthLinkStatus}</p>}
+                  {growthLinksLoading && <p className="mt-5 text-sm text-primary/65">Loading growth links…</p>}
+                  {!growthLinksLoading && growthLinks.length === 0 && (
+                    <p className="mt-5 rounded-xl border border-dashed border-primary/20 p-4 text-sm text-primary/65">
+                      No growth links yet. Create the first campaign above.
+                    </p>
+                  )}
+                  <div className="mt-4 space-y-3">
+                    {growthLinks.map((link) => (
+                      <div key={link.id} className="rounded-2xl border border-primary/12 bg-white/45 p-4">
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="font-semibold">{link.name}</p>
+                              <span
+                                className={`rounded-full px-2 py-1 text-[11px] ${link.active ? 'bg-emerald-500/10 text-emerald-800' : 'bg-primary/8 text-primary/55'}`}
+                              >
+                                {link.active ? 'Active' : 'Inactive'}
+                              </span>
+                            </div>
+                            <p className="mt-1 break-all text-xs text-primary/60">{link.share_url}</p>
+                            <p className="mt-1 text-xs text-primary/45">
+                              {link.utm_source} · {link.utm_medium} · {link.utm_campaign}
+                            </p>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => void copyGrowthLink(link)}
+                              className="rounded-lg border border-primary/15 px-3 py-1.5 text-xs font-medium hover:border-primary/35"
+                            >
+                              Copy
+                            </button>
+                            {canManageGrowthLinks && (
+                              <button
+                                type="button"
+                                disabled={growthLinkSaving}
+                                onClick={() => void toggleGrowthLink(link)}
+                                className="rounded-lg border border-primary/15 px-3 py-1.5 text-xs font-medium hover:border-primary/35 disabled:opacity-50"
+                              >
+                                {link.active ? 'Deactivate' : 'Activate'}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-7">
+                          {[
+                            ['Clicks', link.metrics.clicks],
+                            ['Unique', link.metrics.unique_visitors],
+                            ['Signups', link.metrics.signups],
+                            ['Opened', link.metrics.payment_opened],
+                            ['Paid', link.metrics.paid],
+                            ['Revenue', `₹${formatInt(link.metrics.revenue)}`],
+                            ['CVR', formatPct(link.metrics.click_to_signup)],
+                          ].map(([label, value]) => (
+                            <div key={String(label)} className="rounded-xl bg-primary/5 p-2.5">
+                              <p className="text-[10px] uppercase tracking-wider text-primary/50">{label}</p>
+                              <p className="mt-1 text-sm font-semibold">
+                                {typeof value === 'number' ? formatInt(value) : value}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {currentView === 'links' && !canViewGrowthLinks && (
+              <div className="mt-6 rounded-2xl border border-amber-300 bg-amber-50 p-5 text-amber-900">
+                <h2 className="font-semibold">Growth access required</h2>
+                <p className="mt-1 text-sm">
+                  This workspace is available to Owner, Product &amp; Growth, and read-only Analyst roles.
+                </p>
               </div>
             )}
 
