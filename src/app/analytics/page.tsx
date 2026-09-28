@@ -26,6 +26,55 @@ type FunnelResponse = {
   notes: string[];
 };
 
+type ExecutiveResponse = {
+  generated_at: string;
+  window: { from: string; to: string; from_iso: string; to_exclusive_iso: string };
+  revenue: {
+    collected: number;
+    successful_payments: number;
+    paid_customers: number;
+    average_payment: number;
+    monthly_payments: number;
+    lifetime_payments: number;
+  };
+  engagement: {
+    new_users: number;
+    active_users: number;
+    user_messages: number;
+    assistant_messages: number;
+    conversations: number;
+    messages_per_active_user: number | null;
+    today_messages: number;
+    today_user_messages: number;
+    today_assistant_messages: number;
+  };
+  ai: {
+    generations: number;
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+    cost_usd: number;
+    cost_per_1k_tokens_usd: number | null;
+    cached_tokens: number;
+    reasoning_tokens: number;
+    image_tokens: number;
+    web_search_generations: number;
+    top_models: Array<{ model: string; generations: number; tokens: number; cost_usd: number }>;
+    top_providers: Array<{ provider: string; generations: number }>;
+  };
+  reliability: {
+    average_latency_ms: number;
+    p50_latency_ms: number;
+    p95_latency_ms: number;
+    success_rate: number;
+    slow_requests: number;
+    failover_requests: number;
+    failover_rate: number | null;
+  };
+  daily_pulse: Array<{ date: string; messages: number; tokens: number; revenue: number }>;
+  notes: string[];
+};
+
 type FunnelUserRow = {
   user_id: string;
   email: string | null;
@@ -150,9 +199,9 @@ type AnalyticsView =
 
 const PAGE_META: Record<AnalyticsView, { eyebrow: string; title: string; description: string }> = {
   home: {
-    eyebrow: 'Analytics home',
-    title: 'Your complete growth snapshot',
-    description: 'The essential customer journey, conversion, and activity signals in one view.',
+    eyebrow: 'Company command center',
+    title: 'Meera at a glance',
+    description: 'Revenue, customer momentum, product usage, and AI operations in one live view.',
   },
   funnel: {
     eyebrow: 'Conversion intelligence',
@@ -221,6 +270,32 @@ function formatInt(value: number): string {
   return new Intl.NumberFormat('en-US').format(value);
 }
 
+function formatCompact(value: number): string {
+  return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(value);
+}
+
+function formatInr(value: number): string {
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    maximumFractionDigits: value % 1 === 0 ? 0 : 2,
+  }).format(value);
+}
+
+function formatUsd(value: number): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: value > 0 && value < 0.01 ? 4 : 2,
+    maximumFractionDigits: value > 0 && value < 0.01 ? 4 : 2,
+  }).format(value);
+}
+
+function formatDuration(value: number): string {
+  if (value >= 1000) return `${(value / 1000).toFixed(1)}s`;
+  return `${Math.round(value)}ms`;
+}
+
 function formatPct(value: number): string {
   return `${(value * 100).toFixed(2)}%`;
 }
@@ -264,6 +339,9 @@ export default function AnalyticsPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
   const [data, setData] = useState<FunnelResponse | null>(null);
+  const [executiveLoading, setExecutiveLoading] = useState<boolean>(true);
+  const [executiveError, setExecutiveError] = useState<string>('');
+  const [executiveData, setExecutiveData] = useState<ExecutiveResponse | null>(null);
   const [selectedStage, setSelectedStage] = useState<FunnelStageKey | null>('signups');
   const [stageLoading, setStageLoading] = useState<boolean>(false);
   const [stageError, setStageError] = useState<string>('');
@@ -484,6 +562,50 @@ export default function AnalyticsPage() {
     accessToken,
     from,
     needsFunnelData,
+    to,
+  ]);
+
+  useEffect(() => {
+    if (currentView !== 'home' || !accessToken) {
+      setExecutiveLoading(false);
+      return;
+    }
+
+    let canceled = false;
+    const controller = new AbortController();
+
+    const fetchExecutiveData = async () => {
+      setExecutiveLoading(true);
+      setExecutiveError('');
+      try {
+        const params = new URLSearchParams({ from, to });
+        const response = await fetch(`/api/analytics/executive?${params.toString()}`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          cache: 'no-store',
+          signal: controller.signal,
+        });
+        const body = (await response.json().catch(() => null)) as (ExecutiveResponse & { error?: string }) | null;
+        if (!response.ok || !body) throw new Error(body?.error ?? `Request failed (${response.status})`);
+        if (!canceled) setExecutiveData(body);
+      } catch (err) {
+        if (!canceled) {
+          setExecutiveError(err instanceof Error ? err.message : String(err));
+          setExecutiveData(null);
+        }
+      } finally {
+        if (!canceled) setExecutiveLoading(false);
+      }
+    };
+
+    void fetchExecutiveData();
+    return () => {
+      canceled = true;
+      controller.abort();
+    };
+  }, [
+    accessToken,
+    currentView,
+    from,
     to,
   ]);
 
@@ -857,6 +979,72 @@ export default function AnalyticsPage() {
     }),
     { clicks: 0, signups: 0, paid: 0, revenue: 0 },
   );
+  const homeHeadlineCards = [
+    {
+      label: 'Revenue Collected',
+      value: formatInr(executiveData?.revenue.collected ?? 0),
+      detail: `${formatInt(executiveData?.revenue.successful_payments ?? 0)} successful payments`,
+      accent: 'from-emerald-500 to-teal-400',
+    },
+    {
+      label: 'Payment Opened',
+      value: formatInt(paymentOpened),
+      detail: 'High-intent users in this window',
+      accent: 'from-amber-500 to-orange-400',
+    },
+    {
+      label: 'Paid Customers',
+      value: formatInt(executiveData?.revenue.paid_customers ?? 0),
+      detail: 'Real paying customers',
+      accent: 'from-emerald-600 to-lime-400',
+    },
+    {
+      label: 'New Users',
+      value: formatInt(executiveData?.engagement.new_users ?? signups),
+      detail: 'External signups in this window',
+      accent: 'from-sky-500 to-cyan-400',
+    },
+    {
+      label: 'Active Users',
+      value: formatInt(executiveData?.engagement.active_users ?? active),
+      detail: 'Users who sent a message',
+      accent: 'from-violet-500 to-fuchsia-400',
+    },
+    {
+      label: 'Messages Today',
+      value: formatInt(executiveData?.engagement.today_messages ?? 0),
+      detail: `${formatInt(executiveData?.engagement.today_user_messages ?? 0)} user · ${formatInt(executiveData?.engagement.today_assistant_messages ?? 0)} Meera`,
+      accent: 'from-rose-500 to-pink-400',
+    },
+    {
+      label: 'AI Tokens',
+      value: formatCompact(executiveData?.ai.total_tokens ?? 0),
+      detail: `${formatCompact(executiveData?.ai.generations ?? 0)} model generations`,
+      accent: 'from-indigo-500 to-blue-400',
+    },
+    {
+      label: 'OpenRouter Spend',
+      value: formatUsd(executiveData?.ai.cost_usd ?? 0),
+      detail: `${formatUsd(executiveData?.ai.cost_per_1k_tokens_usd ?? 0)} per 1K tokens`,
+      accent: 'from-[#0f4931] to-emerald-400',
+    },
+  ];
+  const dailyPulse = executiveData?.daily_pulse ?? [];
+  const maxDailyMessages = Math.max(...dailyPulse.map((item) => item.messages), 1);
+  const reliabilityHealth = executiveData
+    ? executiveData.reliability.success_rate >= 0.98
+      ? { label: 'Healthy', tone: 'bg-emerald-100 text-emerald-800' }
+      : executiveData.reliability.success_rate >= 0.95
+        ? { label: 'Watch', tone: 'bg-amber-100 text-amber-800' }
+        : { label: 'Action needed', tone: 'bg-rose-100 text-rose-800' }
+    : { label: 'Loading', tone: 'bg-primary/8 text-primary/60' };
+  const latencyHealth = executiveData
+    ? executiveData.reliability.p95_latency_ms <= 5000
+      ? { label: 'Healthy', tone: 'bg-emerald-100 text-emerald-800' }
+      : executiveData.reliability.p95_latency_ms <= 10000
+        ? { label: 'Watch', tone: 'bg-amber-100 text-amber-800' }
+        : { label: 'Action needed', tone: 'bg-rose-100 text-rose-800' }
+    : { label: 'Loading', tone: 'bg-primary/8 text-primary/60' };
 
   return (
     <main className="min-h-[100dvh] bg-background px-4 py-4 text-primary sm:px-6 sm:py-6">
@@ -1045,8 +1233,7 @@ export default function AnalyticsPage() {
               )}
             </div>
 
-            {(currentView === 'home' ||
-              currentView === 'funnel' ||
+            {(currentView === 'funnel' ||
               currentView === 'acquisition' ||
               currentView === 'users' ||
               currentView === 'conversations') && (
@@ -1080,36 +1267,252 @@ export default function AnalyticsPage() {
             )}
 
             {currentView === 'home' && (
-              <div className="mt-6 rounded-2xl border border-primary/15 bg-background p-4 sm:p-5">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.16em] text-primary/55">Explore the workspace</p>
-                  <h2 className="mt-1 text-lg font-semibold">Open a focused analytics view</h2>
-                </div>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                  {ANALYTICS_NAV_ITEMS.filter(
-                    (item) =>
-                      item.href !== '/analytics' &&
-                      (canManageAccess || item.href !== '/analytics/team-access') &&
-                      (canViewGrowthLinks || item.href !== '/analytics/links'),
-                  ).map((item) => (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      className="group rounded-2xl border border-primary/12 bg-white/45 p-4 transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-sm"
+              <div className="mt-6 space-y-5">
+                {executiveError && (
+                  <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+                    {executiveError}
+                  </div>
+                )}
+
+                <section aria-label="Company headline metrics" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  {homeHeadlineCards.map((card) => (
+                    <article
+                      key={card.label}
+                      className="relative min-h-[142px] overflow-hidden rounded-2xl border border-primary/12 bg-background p-4 shadow-[0_8px_24px_rgba(15,73,49,0.04)]"
                     >
-                      <div className="flex items-center gap-3">
-                        <span className="grid h-9 w-9 place-items-center rounded-xl bg-primary/8 text-[10px] font-semibold tracking-wider">
-                          {item.short}
-                        </span>
-                        <div>
-                          <p className="font-medium">{item.label}</p>
-                          <p className="text-xs text-primary/55">{item.description}</p>
-                        </div>
-                      </div>
-                      <p className="mt-3 text-xs font-medium text-primary/60 group-hover:text-primary">Open page →</p>
-                    </Link>
+                      <span className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${card.accent}`} />
+                      <p className="text-[11px] uppercase tracking-[0.16em] text-primary/60">{card.label}</p>
+                      {executiveLoading ? (
+                        <div className="mt-4 h-9 w-24 animate-pulse rounded-lg bg-primary/10" />
+                      ) : (
+                        <p className="mt-3 text-3xl font-semibold tracking-tight">{card.value}</p>
+                      )}
+                      <p className="mt-3 text-xs leading-5 text-primary/60">{card.detail}</p>
+                    </article>
                   ))}
-                </div>
+                </section>
+
+                <section className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
+                  <article className="rounded-2xl border border-primary/15 bg-[#071a13] p-5 text-white shadow-[0_18px_50px_rgba(4,36,24,0.12)]">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-emerald-200/65">Company pulse</p>
+                        <h2 className="mt-1 text-xl font-semibold">Daily customer activity</h2>
+                        <p className="mt-1 text-sm text-white/55">
+                          User messages across the latest 14 days in this window.
+                        </p>
+                      </div>
+                      <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-white/70">Real users only</span>
+                    </div>
+
+                    <div className="mt-6 flex h-44 items-end gap-2" aria-label="Daily message activity chart">
+                      {dailyPulse.map((point) => {
+                        const height = Math.max(5, Math.round((point.messages / maxDailyMessages) * 100));
+                        return (
+                          <div
+                            key={point.date}
+                            className="group flex min-w-0 flex-1 flex-col items-center justify-end gap-2"
+                          >
+                            <div className="relative flex h-32 w-full items-end rounded-lg bg-white/5">
+                              <div
+                                className="w-full rounded-lg bg-gradient-to-t from-emerald-500 to-emerald-200 transition group-hover:brightness-110"
+                                style={{ height: `${height}%` }}
+                                title={`${point.date}: ${formatInt(point.messages)} user messages`}
+                              />
+                            </div>
+                            <span className="hidden text-[9px] text-white/45 sm:block">
+                              {new Date(`${point.date}T00:00:00`).toLocaleDateString('en-IN', {
+                                day: '2-digit',
+                                month: 'short',
+                              })}
+                            </span>
+                          </div>
+                        );
+                      })}
+                      {!executiveLoading && dailyPulse.length === 0 && (
+                        <div className="grid h-full w-full place-items-center rounded-xl border border-dashed border-white/15 text-sm text-white/50">
+                          No activity in this window
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="mt-5 grid grid-cols-2 gap-3 border-t border-white/10 pt-4 sm:grid-cols-4">
+                      {[
+                        ['User messages', formatCompact(executiveData?.engagement.user_messages ?? 0)],
+                        ['Conversations', formatCompact(executiveData?.engagement.conversations ?? 0)],
+                        ['Messages / active', String(executiveData?.engagement.messages_per_active_user ?? 0)],
+                        ['Assistant replies', formatCompact(executiveData?.engagement.assistant_messages ?? 0)],
+                      ].map(([label, value]) => (
+                        <div key={label}>
+                          <p className="text-[10px] uppercase tracking-wider text-white/40">{label}</p>
+                          <p className="mt-1 text-lg font-semibold">{value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </article>
+
+                  <article className="rounded-2xl border border-primary/15 bg-background p-5">
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-primary/55">Revenue mix</p>
+                    <h2 className="mt-1 text-xl font-semibold">Payments collected</h2>
+                    <p className="mt-4 text-4xl font-semibold tracking-tight">
+                      {formatInr(executiveData?.revenue.collected ?? 0)}
+                    </p>
+                    <p className="mt-1 text-sm text-primary/60">Selected window · successful real payments</p>
+                    <div className="mt-5 space-y-3">
+                      {[
+                        ['Average payment', formatInr(executiveData?.revenue.average_payment ?? 0)],
+                        ['Monthly payments', formatInt(executiveData?.revenue.monthly_payments ?? 0)],
+                        ['Lifetime payments', formatInt(executiveData?.revenue.lifetime_payments ?? 0)],
+                        ['Paying customers', formatInt(executiveData?.revenue.paid_customers ?? 0)],
+                      ].map(([label, value]) => (
+                        <div
+                          key={label}
+                          className="flex items-center justify-between gap-4 border-b border-primary/8 pb-3 text-sm last:border-0"
+                        >
+                          <span className="text-primary/60">{label}</span>
+                          <span className="font-semibold">{value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </article>
+                </section>
+
+                <section className="grid gap-5 xl:grid-cols-2">
+                  <article className="rounded-2xl border border-primary/15 bg-background p-5">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-primary/55">AI operations</p>
+                        <h2 className="mt-1 text-xl font-semibold">Tokens &amp; OpenRouter economics</h2>
+                      </div>
+                      <span className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium text-indigo-800">
+                        {formatCompact(executiveData?.ai.generations ?? 0)} generations
+                      </span>
+                    </div>
+                    <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                      {[
+                        ['Prompt tokens', formatCompact(executiveData?.ai.prompt_tokens ?? 0)],
+                        ['Completion tokens', formatCompact(executiveData?.ai.completion_tokens ?? 0)],
+                        ['Cached tokens', formatCompact(executiveData?.ai.cached_tokens ?? 0)],
+                        ['Reasoning tokens', formatCompact(executiveData?.ai.reasoning_tokens ?? 0)],
+                        ['Web search calls', formatCompact(executiveData?.ai.web_search_generations ?? 0)],
+                        ['Cost / 1K tokens', formatUsd(executiveData?.ai.cost_per_1k_tokens_usd ?? 0)],
+                      ].map(([label, value]) => (
+                        <div key={label} className="rounded-xl bg-primary/[0.045] p-3">
+                          <p className="text-[10px] uppercase tracking-wider text-primary/50">{label}</p>
+                          <p className="mt-1.5 text-lg font-semibold">{value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </article>
+
+                  <article className="rounded-2xl border border-primary/15 bg-background p-5">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-primary/55">
+                          Speed &amp; reliability
+                        </p>
+                        <h2 className="mt-1 text-xl font-semibold">Production health</h2>
+                      </div>
+                      <span className={`rounded-full px-3 py-1 text-xs font-medium ${reliabilityHealth.tone}`}>
+                        {reliabilityHealth.label}
+                      </span>
+                    </div>
+                    <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                      {[
+                        ['Success rate', formatPct(executiveData?.reliability.success_rate ?? 0)],
+                        ['Median latency', formatDuration(executiveData?.reliability.p50_latency_ms ?? 0)],
+                        ['P95 latency', formatDuration(executiveData?.reliability.p95_latency_ms ?? 0)],
+                        ['Average latency', formatDuration(executiveData?.reliability.average_latency_ms ?? 0)],
+                        ['Slow requests', formatInt(executiveData?.reliability.slow_requests ?? 0)],
+                        ['Failovers', formatInt(executiveData?.reliability.failover_requests ?? 0)],
+                      ].map(([label, value]) => (
+                        <div key={label} className="rounded-xl border border-primary/10 p-3">
+                          <p className="text-[10px] uppercase tracking-wider text-primary/50">{label}</p>
+                          <p className="mt-1.5 text-lg font-semibold">{value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </article>
+                </section>
+
+                <section className="grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(300px,0.8fr)]">
+                  <article className="rounded-2xl border border-primary/15 bg-background p-5">
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-primary/55">OpenRouter routing</p>
+                    <h2 className="mt-1 text-xl font-semibold">Top models</h2>
+                    <div className="mt-4 overflow-x-auto">
+                      <table className="w-full min-w-[520px] text-sm">
+                        <thead className="text-left text-[10px] uppercase tracking-wider text-primary/45">
+                          <tr>
+                            <th className="pb-2 font-medium">Model</th>
+                            <th className="pb-2 text-right font-medium">Generations</th>
+                            <th className="pb-2 text-right font-medium">Tokens</th>
+                            <th className="pb-2 text-right font-medium">Spend</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(executiveData?.ai.top_models ?? []).map((model) => (
+                            <tr key={model.model} className="border-t border-primary/8">
+                              <td className="max-w-[250px] truncate py-3 font-medium" title={model.model}>
+                                {model.model}
+                              </td>
+                              <td className="py-3 text-right text-primary/65">{formatInt(model.generations)}</td>
+                              <td className="py-3 text-right text-primary/65">{formatCompact(model.tokens)}</td>
+                              <td className="py-3 text-right font-medium">{formatUsd(model.cost_usd)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </article>
+
+                  <article className="rounded-2xl border border-primary/15 bg-background p-5">
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-primary/55">Operational watchlist</p>
+                    <h2 className="mt-1 text-xl font-semibold">What needs attention</h2>
+                    <div className="mt-4 space-y-3">
+                      <div className="rounded-xl border border-primary/10 p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="font-medium">Request reliability</span>
+                          <span
+                            className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${reliabilityHealth.tone}`}
+                          >
+                            {reliabilityHealth.label}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-xs text-primary/55">
+                          {formatPct(executiveData?.reliability.success_rate ?? 0)} successful generations
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-primary/10 p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="font-medium">P95 response speed</span>
+                          <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${latencyHealth.tone}`}>
+                            {latencyHealth.label}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-xs text-primary/55">
+                          {formatDuration(executiveData?.reliability.p95_latency_ms ?? 0)} at the 95th percentile
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-primary/10 p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="font-medium">Provider routing</span>
+                          <span className="rounded-full bg-sky-100 px-2.5 py-1 text-[10px] font-semibold text-sky-800">
+                            Live
+                          </span>
+                        </div>
+                        <p className="mt-2 text-xs leading-5 text-primary/60">
+                          {(executiveData?.ai.top_providers ?? [])
+                            .slice(0, 3)
+                            .map((provider) => `${provider.provider} · ${formatInt(provider.generations)}`)
+                            .join('  /  ') || 'No provider telemetry in this window'}
+                        </p>
+                      </div>
+                    </div>
+                    <p className="mt-4 text-[11px] leading-5 text-primary/45">
+                      Today uses IST. All other blocks follow the selected date window.
+                    </p>
+                  </article>
+                </section>
               </div>
             )}
 
@@ -1386,7 +1789,7 @@ export default function AnalyticsPage() {
               </div>
             )}
 
-            {(currentView === 'home' || currentView === 'funnel') && (
+            {currentView === 'funnel' && (
               <div
                 id="funnel"
                 className="mt-6 scroll-mt-6 rounded-2xl border border-primary/15 bg-background p-4 sm:p-5"
