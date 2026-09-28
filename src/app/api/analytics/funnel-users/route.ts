@@ -8,9 +8,16 @@ const DEFAULT_ALLOWED_DOMAIN = (process.env.ANALYTICS_ALLOWED_EMAIL_DOMAIN ?? 'h
   .trim()
   .toLowerCase();
 const EXCLUDED_ANALYTICS_EMAIL_DOMAINS = new Set(
-  (process.env.ANALYTICS_EXCLUDED_EMAIL_DOMAINS ?? `example.com,example.net,example.org,${DEFAULT_ALLOWED_DOMAIN}`)
+  (process.env.ANALYTICS_EXCLUDED_EMAIL_DOMAINS ??
+    `example.com,example.net,example.org,example.invalid,invalid,local,localhost,${DEFAULT_ALLOWED_DOMAIN}`)
     .split(',')
     .map((value) => value.trim().toLowerCase().replace(/^@/, ''))
+    .filter(Boolean),
+);
+const EXCLUDED_ANALYTICS_EMAILS = new Set(
+  (process.env.ANALYTICS_EXCLUDED_EMAILS ?? '')
+    .split(',')
+    .map((value) => value.trim().toLowerCase())
     .filter(Boolean),
 );
 const EXCLUDED_ANALYTICS_EMAIL_PREFIXES = (
@@ -182,12 +189,16 @@ function isRealAnalyticsUser(row: SignupUserRow): boolean {
   const email = String(row.email ?? '').trim().toLowerCase();
   const name = String(row.name ?? '').trim().toLowerCase();
 
-  if (email) {
-    const [localPart, domain] = email.split('@');
-    if (domain && EXCLUDED_ANALYTICS_EMAIL_DOMAINS.has(domain)) return false;
-    if (EXCLUDED_ANALYTICS_EMAIL_PREFIXES.some((prefix) => localPart.startsWith(prefix))) return false;
-    if (email.includes('+codex') || email.includes('+smoke') || email.includes('+test')) return false;
-  }
+  // Analytics only includes identifiable, external accounts. Email-less UUID rows
+  // are typically incomplete auth/test records and must not affect any stage.
+  const emailMatch = email.match(/^([^\s@]+)@([^\s@]+\.[^\s@]+)$/);
+  if (!emailMatch) return false;
+
+  const [, localPart, domain] = emailMatch;
+  if (EXCLUDED_ANALYTICS_EMAILS.has(email)) return false;
+  if (EXCLUDED_ANALYTICS_EMAIL_DOMAINS.has(domain)) return false;
+  if (EXCLUDED_ANALYTICS_EMAIL_PREFIXES.some((prefix) => localPart.startsWith(prefix))) return false;
+  if (/(^|[+._-])(codex|smoke|test|testing|e2e|qa)([+._-]|$)/i.test(localPart)) return false;
 
   if (name && EXCLUDED_ANALYTICS_NAME_PREFIXES.some((prefix) => name.startsWith(prefix))) return false;
 
@@ -683,7 +694,7 @@ export async function GET(request: NextRequest) {
         notes: [
           'payment_page_opened uses first-party paywall events captured from the payment route.',
           'active is WAU: unique real users with at least one user message in the selected window.',
-          'Test/internal automation users are excluded from user counts; BYPASS payment rows do not count as opened or paid.',
+          'Only users with a valid external email are included; internal, test, automation, incomplete, and BYPASS records are excluded.',
         ],
       },
       {

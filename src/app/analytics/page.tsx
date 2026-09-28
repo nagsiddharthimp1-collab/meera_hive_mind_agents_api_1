@@ -910,7 +910,7 @@ export default function AnalyticsPage() {
                             <tr key={user.user_id} className="border-t border-primary/8">
                               <td className="px-3 py-2 align-top">
                                 <p className="font-medium">{user.name || 'Unknown Name'}</p>
-                                <p className="text-xs text-primary/65">{user.email || user.user_id}</p>
+                                <p className="text-xs text-primary/65">{user.email || '—'}</p>
                               </td>
                               <td className="px-3 py-2">{user.source_channel}</td>
                               <td className="px-3 py-2">{user.campaign || '—'}</td>
