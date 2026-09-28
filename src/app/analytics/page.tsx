@@ -1024,7 +1024,8 @@ export default function AnalyticsPage() {
                       {conversationData.access_mode} access
                     </span>
                     <span className="text-xs text-primary/55">
-                      {formatInt(conversationData.messages.length)} messages{conversationData.truncated ? ' · latest 500' : ''}
+                      Newest first · {formatInt(conversationData.messages.length)} messages
+                      {conversationData.truncated ? ' · latest 500' : ''}
                     </span>
                   </div>
                   <div className="space-y-3">

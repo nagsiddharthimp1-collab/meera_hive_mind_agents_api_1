@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
     .from('messages')
     .select('message_id, content_type, content, timestamp, session_id, model, message_type, is_call')
     .eq('user_id', user.auth_id)
-    .order('timestamp', { ascending: false })
+    .order('timestamp', { ascending: false, nullsFirst: false })
     .limit(MAX_MESSAGES);
 
   if (messagesError) return NextResponse.json({ error: 'Unable to load conversations.' }, { status: 500 });
@@ -52,9 +52,10 @@ export async function GET(request: NextRequest) {
   });
   if (!audited) return NextResponse.json({ error: 'Conversation access was not returned because auditing failed.' }, { status: 500 });
 
-  const messages = (rows ?? [])
-    .reverse()
-    .map((row) => ({ ...row, content: canViewFull ? row.content : redactSensitiveText(String(row.content ?? '')) }));
+  const messages = (rows ?? []).map((row) => ({
+    ...row,
+    content: canViewFull ? row.content : redactSensitiveText(String(row.content ?? '')),
+  }));
 
   return NextResponse.json(
     {
