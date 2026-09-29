@@ -70,14 +70,14 @@ export function ConnectorsView() {
     {
       key: 'gmail',
       title: 'Gmail',
-      description: 'Read and search email, prepare replies, and send only after you approve.',
+      description: 'Read and search email, reply in the original thread, and send only after you approve.',
       icon: FiMail,
       ready: status.connectors?.gmail?.connected === true,
     },
     {
       key: 'calendar',
       title: 'Google Calendar',
-      description: 'Check your schedule and prepare event changes for your approval.',
+      description: 'Check your schedule, add or reschedule events, and cancel only after you approve.',
       icon: FiCalendar,
       ready: status.connectors?.calendar?.connected === true,
     },
