@@ -19,7 +19,17 @@ export function isAgentCandidate(message: string): boolean {
   // broad enough that natural requests such as "find my unread mails" reach it.
   const connector = /\b(gmail|inbox|e-?mails?|mails?|calendar|meetings?|schedule|availability|appointments?)\b/i.test(value)
     || /\b(?:am i|are we|do i have)\b.{0,60}\bfree\b/i.test(value);
-  return delegated || dining || flight || food || investors || connector;
+  // Explicit website interaction belongs to Hermes even when the same request
+  // could be approximated with search. This gate only decides whether to ask
+  // the backend router; it does not itself grant browser access or actions.
+  const explicitBrowser = /\b(?:use (?:the )?browser|browser automation|open|visit|navigate(?: to)?|browse|inspect|go to)\b/i.test(value)
+    && (
+      /\b(?:https?:\/\/|www\.)\S+/i.test(value)
+      || /\b[a-z0-9][a-z0-9-]*(?:\.[a-z]{2,})(?:\/\S*)?\b/i.test(value)
+      || /\b(?:website|webpage|site|page|pricing|catalog(?:ue)?|product listing)\b/i.test(value)
+    );
+  const commerceBrowser = /\b(?:fetch|find|compare|check|show|list)\b.{0,100}\b(?:products?|items?|prices?|fares?|tickets?|plans?)\b.{0,60}\b(?:on|from|at)\b\s+[a-z0-9][a-z0-9 .&'-]{1,40}$/i.test(value);
+  return delegated || dining || flight || food || investors || connector || explicitBrowser || commerceBrowser;
 }
 
 export async function requestAgentRoute(args: {
