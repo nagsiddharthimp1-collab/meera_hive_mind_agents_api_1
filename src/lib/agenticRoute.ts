@@ -8,7 +8,8 @@ export type AgentStatus = {
 // A cheap local gate keeps ordinary conversation on the existing personal/work route.
 // The agent model makes the final decision for candidate requests.
 export function isAgentCandidate(message: string): boolean {
-  const value = message.toLowerCase();
+  const value = message.toLowerCase().replace(/\s+/g, ' ').trim();
+  const explicitAgent = /\b(?:do|run|start|use|perform|handle|try)\s+(?:an?\s+)?agentic\s+(?:search|research|task|workflow|run)\b|\bagentic\s+(?:search|research|task|workflow|run)\b/i.test(value);
   const delegated = /\b(investigate|research|dig into|look into|compare sources|fact.check|verify sources|compare .{0,80}(quotes|vendors|plans|sources|options)|find and (summari[sz]e|compare|report)|search (my|our|the) (messages|conversations)|work through (the|this) steps)\b/i.test(value);
   const dining = /\b(find|plan|compare|shortlist|recommend|book|reserve|pick)\b.*\b(restaurants?|cafes?|places? to eat|dinner|lunch|brunch|breakfast|table for (?:two|three|four|[2-9]))\b/i.test(value);
   const flight = /\b(find|search|compare|plan|book|pick|choose|recommend)\b.*\b(flights?|airfare|airlines?|air tickets?)\b|\b(flights?|airfare|air tickets?)\b.*\b(from|to|for|between)\b/i.test(value);
@@ -17,8 +18,15 @@ export function isAgentCandidate(message: string): boolean {
   // This is only a cheap candidate gate. The backend router still makes the
   // final agentic decision, so connector language should be intentionally
   // broad enough that natural requests such as "find my unread mails" reach it.
-  const connector = /\b(gmail|inbox|e-?mails?|mails?|calendar|meetings?|schedule|availability|appointments?)\b/i.test(value)
-    || /\b(?:am i|are we|do i have)\b.{0,60}\bfree\b/i.test(value);
+  const connectorSupportQuestion = /\b(?:can(?:not|'t)|unable|not able|problem|issue|trouble)\b.{0,90}\b(?:send|receive|gmail|mail|e-?mail)\b/i.test(value);
+  const connectorCapabilityCopy = /\b(?:write|rewrite|edit|polish|improve|draft)\b.{0,90}\b(?:post|article|bio|description|copy|caption|announcement|website|linkedin)\b/i.test(value);
+  const connectorRead = /\b(?:show|list|find|search|read|check|summari[sz]e|triage|get|look (?:at|through))\b.{0,120}\b(?:my\s+)?(?:gmail|inbox|e-?mails?|mails?|calendar|meetings?|schedule|availability|appointments?)\b/i.test(value)
+    || /\b(?:unread|recent|latest|today(?:'s)?)\s+(?:e-?mails?|mails?|meetings?|appointments?)\b/i.test(value)
+    || /\bwhat(?:'s| is)\b.{0,80}\b(?:on\s+)?my\s+(?:calendar|schedule|inbox)\b/i.test(value)
+    || /\b(?:am i|are we|do i have)\b.{0,60}\b(?:free|available|meeting|appointment)\b/i.test(value);
+  const connectorWrite = /\b(?:send|reply|forward|compose|draft|write|prepare)\b.{0,160}\b(?:e-?mail|gmail|mail|message)\b|\b(?:create|add|book|schedule|reschedule|move|update|edit|cancel|delete)\b.{0,140}\b(?:calendar|event|meeting|appointment)\b/i.test(value)
+    || /\b(?:e-?mail|gmail|mail)\b.{0,100}\b(?:to|reply|forward)\b/i.test(value);
+  const connector = !connectorSupportQuestion && !connectorCapabilityCopy && (connectorRead || connectorWrite);
   // Explicit website interaction belongs to Hermes even when the same request
   // could be approximated with search. This gate only decides whether to ask
   // the backend router; it does not itself grant browser access or actions.
@@ -28,8 +36,10 @@ export function isAgentCandidate(message: string): boolean {
       || /\b[a-z0-9][a-z0-9-]*(?:\.[a-z]{2,})(?:\/\S*)?\b/i.test(value)
       || /\b(?:website|webpage|site|page|pricing|catalog(?:ue)?|product listing)\b/i.test(value)
     );
-  const commerceBrowser = /\b(?:fetch|find|compare|check|show|list)\b.{0,100}\b(?:products?|items?|prices?|fares?|tickets?|plans?)\b.{0,60}\b(?:on|from|at)\b\s+[a-z0-9][a-z0-9 .&'-]{1,40}$/i.test(value);
-  return delegated || dining || flight || food || investors || connector || explicitBrowser || commerceBrowser;
+  const commerceBrowser = /\b(?:shop|buy|order|purchase|find|fetch|search|compare|recommend|shortlist|pick|choose|show|list)\b.{0,160}\b(?:products?|items?|prices?|deals?|offers?|trimmers?|phones?|laptops?|shoes?|clothes?|fashion|electronics?|amazon|flipkart|myntra|meesho|ajio)\b/i.test(value)
+    || /\b(?:amazon|flipkart|myntra|meesho|ajio)\b.{0,140}\b(?:product|item|price|deal|buy|order|compare|recommend|shortlist)\b/i.test(value);
+  const localService = /\b(?:find|search|compare|recommend|shortlist|pick|choose|book)\b.{0,140}\b(?:barbers?|barber\s+shops?|salons?|spas?|clinics?|dentists?|gyms?|mechanics?|plumbers?|electricians?|cleaners?|hotels?)\b/i.test(value);
+  return explicitAgent || delegated || dining || flight || food || investors || connector || explicitBrowser || commerceBrowser || localService;
 }
 
 export async function requestAgentRoute(args: {
