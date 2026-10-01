@@ -1074,8 +1074,8 @@ export const chatService = {
           route = await requestAgentRoute(routeArgs());
         } catch (error) {
           // A token may expire between the optimistic message insert and the
-          // route request. Refresh once, then fail open to normal chat so the
-          // user never receives an empty assistant bubble.
+          // route request. Refresh once. Candidate tasks must not fall through
+          // to normal chat because that can fabricate a connector result.
           if (getAgentRouteErrorStatus(error) === 401 && !signal?.aborted) {
             const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
             if (!refreshError && refreshed.session?.access_token) {
@@ -1083,15 +1083,17 @@ export const chatService = {
               try {
                 route = await requestAgentRoute(routeArgs());
               } catch (retryError) {
-                console.warn('Agent route retry failed; continuing with normal chat', retryError);
+                console.error('Agent route retry failed', retryError);
+                throw retryError;
               }
             } else {
-              console.warn('Agent route session refresh failed; continuing with normal chat', refreshError || error);
+              console.error('Agent route session refresh failed', refreshError || error);
+              throw refreshError || error;
             }
-          } else if (!signal?.aborted) {
-            console.warn('Agent route failed; continuing with normal chat', error);
+          } else {
+            if (!signal?.aborted) console.error('Agent route failed', error);
+            throw error;
           }
-          if (signal?.aborted) throw error;
         }
         if (route?.executionMode === 'agentic' && route.taskId) {
           onMeta?.({ conversationClass: route.conversationClass, agenticActive: true, taskId: route.taskId, statusLabel: 'Planning the steps', model: 'meera-agent' });

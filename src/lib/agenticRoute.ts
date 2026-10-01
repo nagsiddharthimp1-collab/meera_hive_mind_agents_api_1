@@ -39,6 +39,8 @@ export function isAgentCandidate(message: string): boolean {
   const connectorSupportQuestion = /\b(?:can(?:not|'t)|unable|not able|problem|issue|trouble)\b.{0,90}\b(?:send|receive|gmail|mail|e-?mail)\b/i.test(value);
   const connectorCapabilityCopy = /\b(?:write|rewrite|edit|polish|improve|draft)\b.{0,90}\b(?:post|article|bio|description|copy|caption|announcement|website|linkedin)\b/i.test(value);
   const connectorRead = /\b(?:show|list|find|search|read|check|summari[sz]e|triage|get|look (?:at|through))\b.{0,120}\b(?:my\s+)?(?:gmail|inbox|e-?mails?|mails?|calendar|meetings?|schedule|availability|appointments?)\b/i.test(value)
+    || /\b(?:track|monitor|follow(?:\s+up\s+on)?)\b.{0,140}\b(?:gmail|inbox|e-?mails?|mails?|replies?|threads?)\b/i.test(value)
+    || /\b(?:has|did)\b.{0,100}\b(?:repl(?:y|ied)|respond(?:ed)?)\b/i.test(value)
     || /\b(?:unread|recent|latest|today(?:'s)?)\s+(?:e-?mails?|mails?|meetings?|appointments?)\b/i.test(value)
     || /\bwhat(?:'s| is)\b.{0,80}\b(?:on\s+)?my\s+(?:calendar|schedule|inbox)\b/i.test(value)
     || /\b(?:am i|are we|do i have)\b.{0,60}\b(?:free|available|meeting|appointment)\b/i.test(value);

@@ -18,7 +18,13 @@ test('routes explicit browser requests to the Agentic classifier', () => {
     'Find me a nice salon for curly hair in HSR.',
     'Find me the best hostel in Hampi.',
     'Find me something nice to eat on Swiggy for HSR and order it.',
+    'find me a cheap flight to goa from bangalore in december',
+    'find me nice cafe near 27th main HSR',
+    'find me active investors in AI space that invested this month',
     'Show my unread emails from today.',
+    'check my latest emails',
+    'track the jayanths email and tell',
+    'Has Jayanth replied yet?',
     'Schedule a meeting with Arya tomorrow at 3 PM.',
     "What's on my calendar tomorrow?",
   ];
