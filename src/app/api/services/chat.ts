@@ -5,6 +5,7 @@ import {
   getAgentRouteErrorStatus,
   getAgentRouteUserMessage,
   isAgentCandidate,
+  isContextualAgentCandidate,
   requestAgentRoute,
   waitForAgent,
 } from '@/lib/agenticRoute';
@@ -1072,6 +1073,14 @@ export const chatService = {
           .gte('created_at', new Date(Date.now() - 24 * 60 * 60_000).toISOString())
           .order('created_at', { ascending: false }).limit(1).maybeSingle();
         agentCandidate = Boolean(pendingQuestion);
+      }
+      if (process.env.NEXT_PUBLIC_AGENTIC_TEXT_ENABLED === 'true' && !agentCandidate && !normalizedAttachments.length && isContextualAgentCandidate(message)) {
+        const { data: recentTask } = await supabase.from('agent_tasks').select('id')
+          .eq('user_id', userId).eq('session_id', effectiveSessionId)
+          .in('status', ['completed', 'partial'])
+          .gte('created_at', new Date(Date.now() - 6 * 60 * 60_000).toISOString())
+          .order('created_at', { ascending: false }).limit(1).maybeSingle();
+        agentCandidate = Boolean(recentTask);
       }
       if (process.env.NEXT_PUBLIC_AGENTIC_TEXT_ENABLED === 'true' && !normalizedAttachments.length && agentCandidate) {
         const routeArgs = () => ({

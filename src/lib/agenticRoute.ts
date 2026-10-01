@@ -70,6 +70,18 @@ export function isAgentCandidate(message: string): boolean {
   return explicitAgent || delegated || naturalDelegation || dining || flight || food || investors || connector || explicitBrowser || commerceBrowser || localService;
 }
 
+// Consult the last completed task only for language that refers back to it.
+// The backend verifies the task belongs to this user and is the immediately
+// preceding user turn before it grants any connector capability.
+export function isContextualAgentCandidate(message: string): boolean {
+  const value = message.toLowerCase().replace(/\s+/g, ' ').trim();
+  if (!value || value.length > 600) return false;
+  return /\b(?:reply|respond|write back|send)\b.{0,220}\b(?:him|her|them|this|that|the|guy|person|candidate|sender|thread)\b|\b(?:reply|respond|write back)\s+(?:to\s+)?[\p{L}'’-]+\b/iu.test(value)
+    || /\b(?:schedule|reschedule|move|update|edit|cancel|delete|add)\b.{0,180}\b(?:it|that|this|meeting|event|appointment)\b/i.test(value)
+    || /\b(?:buy|order|book|reserve|choose|pick|select|go with|take|get)\b.{0,180}\b(?:it|that|this|one|option|first|second|third|cheapest|best)\b|^(?:go ahead|do it|proceed|continue|yes,?\s+(?:do|book|buy|order|send)\s+it)[.!\s]*$/i.test(value)
+    || /^(?:something|anything|make it|only|prefer|instead|how about|what about|in|near|around|for)\b|\b(?:healthier|healthy|homely|cheaper|closest|nearer|earlier|later|morning|evening|vegetarian|non-?veg|personal one|work one)\b/i.test(value);
+}
+
 export async function requestAgentRoute(args: {
   supabaseUrl: string;
   anonKey: string;

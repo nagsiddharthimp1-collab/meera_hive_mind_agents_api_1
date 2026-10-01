@@ -6,6 +6,7 @@ import {
   getAgentRouteErrorStatus,
   getAgentRouteUserMessage,
   isAgentCandidate,
+  isContextualAgentCandidate,
   requestAgentRoute,
 } from './agenticRoute.ts';
 
@@ -55,6 +56,16 @@ test('keeps ordinary conversation out of the Agentic classifier', () => {
   for (const request of requests) {
     assert.equal(isAgentCandidate(request), false, request);
   }
+});
+
+test('recognizes contextual agent continuations', () => {
+  for (const request of [
+    'reply this Nirwan guy that applications are closed',
+    'reschedule it to next Tuesday',
+    'buy that personal one',
+    'something healthy and homely',
+  ]) assert.equal(isContextualAgentCandidate(request), true, request);
+  assert.equal(isContextualAgentCandidate('Tell me about Buddhist philosophy'), false);
 });
 
 test('surfaces an authentication failure so the caller can refresh once', async () => {
