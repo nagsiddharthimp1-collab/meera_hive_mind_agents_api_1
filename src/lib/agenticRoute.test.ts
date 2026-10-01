@@ -34,6 +34,10 @@ test('routes explicit browser requests to the Agentic classifier', () => {
     'Has Jayanth replied yet?',
     'Schedule a meeting with Arya tomorrow at 3 PM.',
     "What's on my calendar tomorrow?",
+    "dude check is meera.me domain available and what's the cost",
+    "check another domain that works and is cheap",
+    "tell me difference between 5.6 Sol & 6 Sol",
+    "GPT Sol dude",
   ];
 
   for (const request of requests) {
@@ -64,6 +68,7 @@ test('recognizes contextual agent continuations', () => {
     'reschedule it to next Tuesday',
     'buy that personal one',
     'something healthy and homely',
+    'check the net and tell',
   ]) assert.equal(isContextualAgentCandidate(request), true, request);
   assert.equal(isContextualAgentCandidate('Tell me about Buddhist philosophy'), false);
 });

@@ -67,7 +67,11 @@ export function isAgentCandidate(message: string): boolean {
   const commerceBrowser = /\b(?:shop|buy|order|purchase|find|get|fetch|search|compare|recommend|shortlist|pick|choose|show|list)\b.{0,160}\b(?:products?|items?|prices?|deals?|offers?|trimmers?|phones?|laptops?|shoes?|clothes?|fashion|electronics?|amazon|flipkart|myntra|meesho|ajio)\b/i.test(value)
     || /\b(?:amazon|flipkart|myntra|meesho|ajio)\b.{0,140}\b(?:product|item|price|deal|buy|order|compare|recommend|shortlist)\b/i.test(value);
   const localService = /\b(?:find|get|search|compare|recommend|shortlist|pick|choose|book)\b.{0,140}\b(?:barbers?|barber\s+shops?|salons?|spas?|clinics?|dentists?|doctors?|vets?|gyms?|mechanics?|plumbers?|electricians?|cleaners?|hostels?|hotels?|resorts?|homestays?|airbnbs?|coworking\s+spaces?)\b/i.test(value);
-  return explicitAgent || delegated || naturalDelegation || dining || flight || food || investors || connector || explicitBrowser || commerceBrowser || localService;
+  const domainResearch = /\b(?:domain|domains|whois|rdap|registrar|registration)\b/i.test(value) && /\b(?:check|find|search|compare|available|availability|cost|price|cheap|register|buy|works?)\b/i.test(value)
+    || /\b(?:check|find|search|available|availability|cost|price|register)\b.{0,120}\b[a-z0-9][a-z0-9-]*\.(?:com|in|me|ai|app|xyz|co|site|online)\b/i.test(value);
+  const modelResearch = /\b(?:gpt|codex|openai|llm|ai model)\b/i.test(value) && /\b(?:compare|comparison|difference|between|cost|price|pricing|latest|current|which|version|model|sol)\b/i.test(value)
+    || /\b\d+(?:\.\d+)?\s+sol\b|\bsol\s+\d+(?:\.\d+)?\b/i.test(value) && /\b(?:compare|comparison|difference|between|cost|price)\b/i.test(value);
+  return explicitAgent || delegated || naturalDelegation || dining || flight || food || investors || connector || explicitBrowser || commerceBrowser || localService || domainResearch || modelResearch;
 }
 
 // Consult the last completed task only for language that refers back to it.
@@ -79,7 +83,7 @@ export function isContextualAgentCandidate(message: string): boolean {
   return /\b(?:reply|respond|write back|send)\b.{0,220}\b(?:him|her|them|this|that|the|guy|person|candidate|sender|thread)\b|\b(?:reply|respond|write back)\s+(?:to\s+)?[\p{L}'’-]+\b/iu.test(value)
     || /\b(?:schedule|reschedule|move|update|edit|cancel|delete|add)\b.{0,180}\b(?:it|that|this|meeting|event|appointment)\b/i.test(value)
     || /\b(?:buy|order|book|reserve|choose|pick|select|go with|take|get)\b.{0,180}\b(?:it|that|this|one|option|first|second|third|cheapest|best)\b|^(?:go ahead|do it|proceed|continue|yes,?\s+(?:do|book|buy|order|send)\s+it)[.!\s]*$/i.test(value)
-    || /^(?:something|anything|make it|only|prefer|instead|how about|what about|in|near|around|for)\b|\b(?:healthier|healthy|homely|cheaper|closest|nearer|earlier|later|morning|evening|vegetarian|non-?veg|personal one|work one)\b/i.test(value);
+    || /^(?:something|anything|another|make it|only|prefer|instead|how about|what about|in|near|around|for|check (?:the )?(?:net|web))\b|\b(?:healthier|healthy|homely|cheaper|closest|nearer|earlier|later|morning|evening|vegetarian|non-?veg|personal one|work one)\b/i.test(value);
 }
 
 export async function requestAgentRoute(args: {
