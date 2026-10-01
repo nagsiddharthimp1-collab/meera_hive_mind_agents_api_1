@@ -1,6 +1,13 @@
 // src/app/api/services/chat.ts
 import { streamMeera } from '@/lib/streamMeera';
-import { getAgentRouteErrorStatus, isAgentCandidate, requestAgentRoute, waitForAgent } from '@/lib/agenticRoute';
+import {
+  AgentRouteError,
+  getAgentRouteErrorStatus,
+  getAgentRouteUserMessage,
+  isAgentCandidate,
+  requestAgentRoute,
+  waitForAgent,
+} from '@/lib/agenticRoute';
 import { supabase } from '@/lib/supabaseClient';
 import { SaveInteractionPayload } from '@/types/chat';
 import { api } from '../client';
@@ -864,6 +871,7 @@ export const chatService = {
     }) => void;
     signal?: AbortSignal;
   }) {
+    let assistantMessageIdForFailure = providedAssistantMessageId || '';
     try {
       const {
         data: { session },
@@ -877,6 +885,7 @@ export const chatService = {
       // Deterministic IDs for this interaction (fixes system_prompt + attachment updates)
       const userMessageId = providedUserMessageId || crypto.randomUUID();
       const assistantMessageId = providedAssistantMessageId || crypto.randomUUID();
+      assistantMessageIdForFailure = assistantMessageId;
 
       /* ---------- Fetch context history ---------- */
       let historyRows: DbMessageRow[] = [];
@@ -1088,7 +1097,7 @@ export const chatService = {
               }
             } else {
               console.error('Agent route session refresh failed', refreshError || error);
-              throw refreshError || error;
+              throw error;
             }
           } else {
             if (!signal?.aborted) console.error('Agent route failed', error);
@@ -1309,6 +1318,17 @@ export const chatService = {
 
       onDone?.(assistantMsg);
     } catch (err) {
+      if (assistantMessageIdForFailure) {
+        const failureText = err instanceof AgentRouteError
+          ? getAgentRouteUserMessage(err)
+          : 'I could not complete that response. Please retry.';
+        const { error: persistError } = await supabase
+          .from('messages')
+          .update({ content: failureText })
+          .eq('message_id', assistantMessageIdForFailure)
+          .eq('content', '');
+        if (persistError) console.error('Failed to persist assistant error state', persistError);
+      }
       onError?.(err);
       throw err;
     }

@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 // @ts-expect-error Node's strip-types test runner requires the explicit TS extension.
-import { getAgentRouteErrorStatus, isAgentCandidate, requestAgentRoute } from './agenticRoute.ts';
+import {
+  AgentRouteError,
+  getAgentRouteErrorStatus,
+  getAgentRouteUserMessage,
+  isAgentCandidate,
+  requestAgentRoute,
+} from './agenticRoute.ts';
 
 test('routes explicit browser requests to the Agentic classifier', () => {
   const requests = [
@@ -103,4 +109,15 @@ test('retries a transient agent endpoint failure', async () => {
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test('turns route failures into durable user-facing messages', () => {
+  assert.equal(
+    getAgentRouteUserMessage(new AgentRouteError('Agent routing failed: 429', 429)),
+    "I reached today's agent-task limit. Please try again later.",
+  );
+  assert.equal(
+    getAgentRouteUserMessage(new AgentRouteError('Agent routing failed', 503)),
+    'I could not reach the agent service. Please retry.',
+  );
 });

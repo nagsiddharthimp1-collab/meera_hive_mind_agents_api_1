@@ -19,6 +19,14 @@ export function getAgentRouteErrorStatus(error: unknown): number | undefined {
   return error instanceof AgentRouteError ? error.status : undefined;
 }
 
+export function getAgentRouteUserMessage(error: unknown): string {
+  const status = getAgentRouteErrorStatus(error);
+  if (status === 401) return 'Your session expired. Please sign in again, then retry.';
+  if (status === 409) return 'I am already handling another task. Let it finish or stop it, then retry.';
+  if (status === 429) return 'I reached today\'s agent-task limit. Please try again later.';
+  return 'I could not reach the agent service. Please retry.';
+}
+
 // A cheap local gate keeps ordinary conversation on the existing personal/work route.
 // The agent model makes the final decision for candidate requests.
 export function isAgentCandidate(message: string): boolean {
