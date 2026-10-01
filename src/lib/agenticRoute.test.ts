@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 // @ts-expect-error Node's strip-types test runner requires the explicit TS extension.
-import { isAgentCandidate } from './agenticRoute.ts';
+import { getAgentRouteErrorStatus, isAgentCandidate, requestAgentRoute } from './agenticRoute.ts';
 
 test('routes explicit browser requests to the Agentic classifier', () => {
   const requests = [
@@ -12,8 +12,12 @@ test('routes explicit browser requests to the Agentic classifier', () => {
     'fetch top selling men product on myntra',
     'Get top selling products on Myntra for men and order for me.',
     'Order me a trimmer from Amazon.',
+    'Get me the cheapest trimmer on Amazon for HSR.',
     'Do agentic search best barber shop in HSR.',
     'Find the best salon near Koramangala and compare prices.',
+    'Find me a nice salon for curly hair in HSR.',
+    'Find me the best hostel in Hampi.',
+    'Find me something nice to eat on Swiggy for HSR and order it.',
     'Show my unread emails from today.',
     'Schedule a meeting with Arya tomorrow at 3 PM.',
     "What's on my calendar tomorrow?",
@@ -32,9 +36,65 @@ test('keeps ordinary conversation out of the Agentic classifier', () => {
     'Rewrite my LinkedIn post about agentic email and calendar capabilities.',
     'Draft a LinkedIn post about Gmail and Calendar integrations.',
     'I am not able to receive or send mail, tell me what to do.',
+    'Tell me about AI economics and how big the bubble is.',
+    'Kumarila Bhatta - tell me more about his philosophy.',
   ];
 
   for (const request of requests) {
     assert.equal(isAgentCandidate(request), false, request);
+  }
+});
+
+test('surfaces an authentication failure so the caller can refresh once', async () => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+  };
+
+  try {
+    await assert.rejects(
+      requestAgentRoute({
+        supabaseUrl: 'https://example.supabase.co',
+        anonKey: 'anon',
+        accessToken: 'expired',
+        message: 'Find me a hostel in Hampi',
+        sessionId: 'session',
+        userMessageId: crypto.randomUUID(),
+        assistantMessageId: crypto.randomUUID(),
+      }),
+      (error: unknown) => getAgentRouteErrorStatus(error) === 401,
+    );
+    assert.equal(calls, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('retries a transient agent endpoint failure', async () => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    if (calls === 1) return new Response(JSON.stringify({ error: 'Temporary failure' }), { status: 503 });
+    return new Response(JSON.stringify({ executionMode: 'agentic', taskId: 'task-1' }), { status: 200 });
+  };
+
+  try {
+    const result = await requestAgentRoute({
+      supabaseUrl: 'https://example.supabase.co',
+      anonKey: 'anon',
+      accessToken: 'valid',
+      message: 'Find me a hostel in Hampi',
+      sessionId: 'session',
+      userMessageId: crypto.randomUUID(),
+      assistantMessageId: crypto.randomUUID(),
+    });
+    assert.equal(result.executionMode, 'agentic');
+    assert.equal(result.taskId, 'task-1');
+    assert.equal(calls, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
   }
 });
