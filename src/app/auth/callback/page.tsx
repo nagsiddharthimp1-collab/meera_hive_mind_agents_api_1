@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { finishGoogleAgentConnection } from '@/lib/auth/startGoogleAgentConnection';
 import { clearAuthRedirectTrace, clearGuestTokenState, logAuthRedirectEvent } from '@/lib/authRedirect';
 import { supabase } from '@/lib/supabaseClient';
-import { finishGoogleAgentConnection } from '@/lib/auth/startGoogleAgentConnection';
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 
 export default function AuthCallbackPage() {
   const router = useRouter();
@@ -23,6 +23,12 @@ export default function AuthCallbackPage() {
         const { data, error } = await supabase.auth.getSession();
 
         if (data.session) {
+          await fetch('/api/analytics/growth-links/attribute', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${data.session.access_token}` },
+          }).catch(() => {
+            // Attribution is best-effort and must never block sign-in.
+          });
           let returnTo: string | null = null;
           try {
             returnTo = await finishGoogleAgentConnection();

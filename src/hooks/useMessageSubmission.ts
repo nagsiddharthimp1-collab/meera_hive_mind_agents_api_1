@@ -3,6 +3,7 @@
 import { chatService } from '@/app/api/services/chat';
 import { useToast } from '@/components/ui/ToastProvider';
 import { createLocalTimestamp } from '@/lib/dateUtils';
+import { AgentRouteError, getAgentRouteUserMessage } from '@/lib/agenticRoute';
 import { supabase } from '@/lib/supabaseClient';
 import { ChatAttachmentInputState, ChatMessageFromServer } from '@/types/chat';
 import React, { MutableRefObject, useCallback, useRef } from 'react';
@@ -510,7 +511,11 @@ export const useMessageSubmission = ({
           return;
         }
 
-        showToast('Failed to respond, try again', {
+        const failureMessage = error instanceof AgentRouteError
+          ? getAgentRouteUserMessage(error)
+          : 'Failed to respond, try again';
+
+        showToast(failureMessage, {
           type: 'error',
           position: 'conversation',
         });
@@ -523,7 +528,8 @@ export const useMessageSubmission = ({
                 ...msg,
                 failed: true,
                 isGeneratingImage: false,
-                failedMessage: 'Failed to respond, try again',
+                content: failureMessage,
+                failedMessage: failureMessage,
               };
             }
             return msg;

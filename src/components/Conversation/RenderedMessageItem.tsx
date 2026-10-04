@@ -93,22 +93,29 @@ const WorkStatusPanel: React.FC<{ statusLabel?: string }> = ({ statusLabel }) =>
     return () => window.clearTimeout(timeout);
   }, [nextThinkingLabel]);
 
+  const thirdStepIcon = /web|search/i.test(thinkingLabel)
+    ? '🌐'
+    : /image|generat/i.test(thinkingLabel)
+      ? '🎨'
+      : '✨';
+
   return (
     <div className="w-full max-w-sm text-primary" role="status" aria-live="polite">
-      <p className="mb-2 text-[15px] font-medium">Working</p>
       <div className="space-y-1.5 text-[14px] text-primary/75">
         {[
-          'Orchestrating',
-          'Searching memories',
-          thinkingLabel,
-        ].map((label, index) => (
-          <div key={label} className="flex items-center gap-2">
+          { icon: '🧠', label: 'Orchestrating' },
+          { icon: '🧩', label: 'Searching memories' },
+          { icon: thirdStepIcon, label: thinkingLabel },
+        ].map(({ icon, label }, index) => (
+          <div key={index} className="flex items-center gap-2">
             <span
-              className={`h-2.5 w-2.5 shrink-0 rounded-full ${
-                index === 2 && thinkingLabel !== 'Thinking' ? 'animate-pulse bg-primary/65' : 'border border-primary/45'
+              className={`w-4 shrink-0 text-center text-[13px] leading-none ${
+                index === 2 && thinkingLabel !== 'Thinking' ? 'animate-pulse' : ''
               }`}
               aria-hidden="true"
-            />
+            >
+              {icon}
+            </span>
             <span>{label}</span>
           </div>
         ))}
@@ -122,7 +129,7 @@ const AgentTaskPanel: React.FC<{ taskId: string; initialStep?: string }> = ({ ta
   const [step, setStep] = useState(initialStep || 'Starting');
   const [result, setResult] = useState('');
   const [cost, setCost] = useState<number | null>(null);
-  const [approval, setApproval] = useState<{ id: string; action_type: string; payload: Record<string, string>; expires_at: string } | null>(null);
+  const [approval, setApproval] = useState<{ id: string; action_type: string; payload: Record<string, unknown>; expires_at: string } | null>(null);
   const [connected, setConnected] = useState(false);
   const [connectedEmail, setConnectedEmail] = useState('');
   const [actionError, setActionError] = useState('');
@@ -205,21 +212,34 @@ const AgentTaskPanel: React.FC<{ taskId: string; initialStep?: string }> = ({ ta
       </div>
       {status === 'awaiting_approval' && approval && Date.parse(approval.expires_at) > Date.now() ? (
         <div className="mt-2 rounded-lg border border-primary/20 p-3 text-sm">
-          <p className="font-medium">Review {approval.action_type === 'propose_email' ? 'email' : approval.action_type === 'propose_calendar' ? 'calendar event' : 'action'}</p>
+          <p className="font-medium">Review {approval.action_type === 'propose_email_reply' ? 'email reply' : approval.action_type === 'propose_email' ? 'email' : approval.action_type === 'propose_calendar_cancel' ? 'event cancellation' : approval.action_type === 'propose_calendar_update' ? 'event changes' : approval.action_type === 'propose_calendar' ? 'calendar event' : 'action'}</p>
           {approval.action_type === 'hermes_tool' ? (
             <div className="mt-2 space-y-1 break-words">
-              <p>{approval.payload.summary}</p>
-              {approval.payload.command && <p className="whitespace-pre-wrap font-mono text-xs">{approval.payload.command}</p>}
+              <p>{String(approval.payload.summary || '')}</p>
+              {Boolean(approval.payload.command) && <p className="whitespace-pre-wrap font-mono text-xs">{String(approval.payload.command)}</p>}
             </div>
-          ) : approval.action_type === 'propose_email' ? (
+          ) : approval.action_type === 'propose_email' || approval.action_type === 'propose_email_reply' ? (
             <div className="mt-2 space-y-1 break-words">
-              <p>To: {approval.payload.to}</p><p>Subject: {approval.payload.subject}</p>
-              <p className="whitespace-pre-wrap">{approval.payload.body}</p>
+              {approval.action_type === 'propose_email_reply' && <p className="text-primary/65">Reply in the original thread</p>}
+              <p>To: {String(approval.payload.to || '')}</p><p>Subject: {String(approval.payload.subject || '')}</p>
+              {Array.isArray(approval.payload.cc) && approval.payload.cc.length > 0 && <p>CC: {approval.payload.cc.join(', ')}</p>}
+              <p className="whitespace-pre-wrap">{String(approval.payload.body || '')}</p>
+            </div>
+          ) : approval.action_type === 'propose_calendar_cancel' ? (
+            <div className="mt-2 space-y-1 break-words">
+              <p>{String(approval.payload.summary || '')}</p>
+              {Boolean(approval.payload.start) && <p>{String(approval.payload.start)}</p>}
+              <p className="text-red-700">This event will be cancelled.</p>
             </div>
           ) : (
             <div className="mt-2 space-y-1 break-words">
-              <p>{approval.payload.summary}</p><p>{approval.payload.start} to {approval.payload.end}</p>
-              <p>{approval.payload.timezone}</p><p className="whitespace-pre-wrap">{approval.payload.description}</p>
+              {approval.action_type === 'propose_calendar_update' && <p className="text-primary/65">Update existing event</p>}
+              <p>{String(approval.payload.summary || '')}</p><p>{String(approval.payload.start || '')} to {String(approval.payload.end || '')}</p>
+              <p>{String(approval.payload.timezone || '')}</p>
+              {Boolean(approval.payload.location) && <p>Location: {String(approval.payload.location)}</p>}
+              {Array.isArray(approval.payload.attendees) && approval.payload.attendees.length > 0 && <p>Guests: {approval.payload.attendees.join(', ')}</p>}
+              {approval.payload.add_google_meet === true && <p>Google Meet link will be added</p>}
+              <p className="whitespace-pre-wrap">{String(approval.payload.description || '')}</p>
             </div>
           )}
           <div className="mt-3 flex flex-wrap gap-3">

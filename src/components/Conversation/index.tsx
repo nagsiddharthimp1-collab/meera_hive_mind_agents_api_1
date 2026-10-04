@@ -1594,6 +1594,7 @@ export const Conversation: React.FC = () => {
   useEffect(() => {
     let isMounted = true;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let authHydrationTimer: ReturnType<typeof setTimeout> | null = null;
 
     const hydrateStarred = async (attempt: number = 0) => {
       const result = await loadPersistedStarredMessages(false);
@@ -1606,13 +1607,17 @@ export const Conversation: React.FC = () => {
       }
     };
 
-    void hydrateStarred();
-
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
       if (session?.user) {
-        void hydrateStarred();
+        // Supabase can deadlock if another client call begins inside the auth
+        // callback while its session lock is still held. Defer the sync until
+        // the callback has returned and released that lock.
+        if (authHydrationTimer) clearTimeout(authHydrationTimer);
+        authHydrationTimer = setTimeout(() => {
+          if (isMounted) void hydrateStarred();
+        }, 0);
       } else if (event === 'SIGNED_OUT') {
         setStarredMessageIds([]);
         setStarredMessageSnapshots([]);
@@ -1622,6 +1627,7 @@ export const Conversation: React.FC = () => {
     return () => {
       isMounted = false;
       if (retryTimer) clearTimeout(retryTimer);
+      if (authHydrationTimer) clearTimeout(authHydrationTimer);
       subscription.unsubscribe();
     };
   }, [loadPersistedStarredMessages]);
