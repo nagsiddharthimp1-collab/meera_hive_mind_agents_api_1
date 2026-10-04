@@ -1,14 +1,6 @@
 // src/app/api/services/chat.ts
 import { streamMeera } from '@/lib/streamMeera';
-import {
-  AgentRouteError,
-  getAgentRouteErrorStatus,
-  getAgentRouteUserMessage,
-  isAgentCandidate,
-  isContextualAgentCandidate,
-  requestAgentRoute,
-  waitForAgent,
-} from '@/lib/agenticRoute';
+import { isAgentCandidate, requestAgentRoute, waitForAgent } from '@/lib/agenticRoute';
 import { supabase } from '@/lib/supabaseClient';
 import { SaveInteractionPayload } from '@/types/chat';
 import { api } from '../client';
@@ -872,7 +864,6 @@ export const chatService = {
     }) => void;
     signal?: AbortSignal;
   }) {
-    let assistantMessageIdForFailure = providedAssistantMessageId || '';
     try {
       const {
         data: { session },
@@ -880,13 +871,12 @@ export const chatService = {
 
       if (!session?.user) throw new SessionExpiredError('Session expired');
       const userId = session.user.id;
-      let accessToken = session.access_token;
+      const accessToken = session.access_token;
       const effectiveSessionId = getOrCreateClientSessionId(userId, sessionId);
 
       // Deterministic IDs for this interaction (fixes system_prompt + attachment updates)
       const userMessageId = providedUserMessageId || crypto.randomUUID();
       const assistantMessageId = providedAssistantMessageId || crypto.randomUUID();
-      assistantMessageIdForFailure = assistantMessageId;
 
       /* ---------- Fetch context history ---------- */
       let historyRows: DbMessageRow[] = [];
@@ -1074,72 +1064,23 @@ export const chatService = {
           .order('created_at', { ascending: false }).limit(1).maybeSingle();
         agentCandidate = Boolean(pendingQuestion);
       }
-      if (process.env.NEXT_PUBLIC_AGENTIC_TEXT_ENABLED === 'true' && !agentCandidate && !normalizedAttachments.length && isContextualAgentCandidate(message)) {
-        const { data: recentTask } = await supabase.from('agent_tasks').select('id')
-          .eq('user_id', userId).eq('session_id', effectiveSessionId)
-          .in('status', ['completed', 'partial'])
-          .gte('created_at', new Date(Date.now() - 6 * 60 * 60_000).toISOString())
-          .order('created_at', { ascending: false }).limit(1).maybeSingle();
-        agentCandidate = Boolean(recentTask);
-      }
       if (process.env.NEXT_PUBLIC_AGENTIC_TEXT_ENABLED === 'true' && !normalizedAttachments.length && agentCandidate) {
-        const routeArgs = () => ({
+        const route = await requestAgentRoute({
           supabaseUrl: SUPABASE_URL!, anonKey: SUPABASE_ANON_KEY!, accessToken,
           message, sessionId: effectiveSessionId, userMessageId, assistantMessageId, signal,
         });
-        let route: Awaited<ReturnType<typeof requestAgentRoute>> | null = null;
-        try {
-          route = await requestAgentRoute(routeArgs());
-        } catch (error) {
-          // A token may expire between the optimistic message insert and the
-          // route request. Refresh once. Candidate tasks must not fall through
-          // to normal chat because that can fabricate a connector result.
-          if (getAgentRouteErrorStatus(error) === 401 && !signal?.aborted) {
-            const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
-            if (!refreshError && refreshed.session?.access_token) {
-              accessToken = refreshed.session.access_token;
-              try {
-                route = await requestAgentRoute(routeArgs());
-              } catch (retryError) {
-                console.error('Agent route retry failed', retryError);
-                throw retryError;
-              }
-            } else {
-              console.error('Agent route session refresh failed', refreshError || error);
-              throw error;
-            }
-          } else {
-            if (!signal?.aborted) console.error('Agent route failed', error);
-            throw error;
-          }
-        }
-        if (route?.executionMode === 'agentic' && route.taskId) {
+        if (route.executionMode === 'agentic' && route.taskId) {
           onMeta?.({ conversationClass: route.conversationClass, agenticActive: true, taskId: route.taskId, statusLabel: 'Planning the steps', model: 'meera-agent' });
-          let result: Awaited<ReturnType<typeof waitForAgent>>;
-          try {
-            result = await waitForAgent({
-              supabaseUrl: SUPABASE_URL!, anonKey: SUPABASE_ANON_KEY!, accessToken,
-              taskId: route.taskId, signal,
-              onStatus: (status) => onMeta?.({
-                conversationClass: route.conversationClass,
-                agenticActive: true,
-                taskId: route.taskId,
-                statusLabel: status.current_step || (status.status === 'queued' ? 'Starting' : 'Working'),
-              }),
-            });
-          } catch (error) {
-            if (signal?.aborted) throw error;
-            // The in-bubble AgentTaskPanel continues polling the durable task.
-            // Do not replace it with a blank/error response just because this
-            // foreground poll temporarily lost its connection.
-            console.warn('Agent status polling interrupted; task panel will reconnect', error);
-            onDone?.({
-              message_id: assistantMessageId, content_type: 'assistant', content: '',
-              timestamp: new Date().toISOString(), attachments: [], is_call: false,
-              failed: false, finish_reason: null,
-            });
-            return;
-          }
+          const result = await waitForAgent({
+            supabaseUrl: SUPABASE_URL!, anonKey: SUPABASE_ANON_KEY!, accessToken,
+            taskId: route.taskId, signal,
+            onStatus: (status) => onMeta?.({
+              conversationClass: route.conversationClass,
+              agenticActive: true,
+              taskId: route.taskId,
+              statusLabel: status.current_step || (status.status === 'queued' ? 'Starting' : 'Working'),
+            }),
+          });
           // Keep approval tasks in their empty task bubble so AgentTaskPanel
           // remains mounted and can render the in-chat approval card.
           const pending = ['queued', 'running', 'awaiting_approval'].includes(result.status);
@@ -1327,17 +1268,6 @@ export const chatService = {
 
       onDone?.(assistantMsg);
     } catch (err) {
-      if (assistantMessageIdForFailure) {
-        const failureText = err instanceof AgentRouteError
-          ? getAgentRouteUserMessage(err)
-          : 'I could not complete that response. Please retry.';
-        const { error: persistError } = await supabase
-          .from('messages')
-          .update({ content: failureText })
-          .eq('message_id', assistantMessageIdForFailure)
-          .eq('content', '');
-        if (persistError) console.error('Failed to persist assistant error state', persistError);
-      }
       onError?.(err);
       throw err;
     }

@@ -1,23 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
-import type { SupabaseClient } from '@supabase/supabase-js';
-import { requireAnalyticsPermission } from '@/lib/analyticsAccess';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const DEFAULT_ALLOWED_DOMAIN = (process.env.ANALYTICS_ALLOWED_EMAIL_DOMAIN ?? 'himeera.com')
   .trim()
   .toLowerCase();
-const EXCLUDED_ANALYTICS_EMAIL_DOMAINS = new Set(
-  (process.env.ANALYTICS_EXCLUDED_EMAIL_DOMAINS ??
-    `example.com,example.net,example.org,example.invalid,invalid,local,localhost,${DEFAULT_ALLOWED_DOMAIN}`)
-    .split(',')
-    .map((value) => value.trim().toLowerCase().replace(/^@/, ''))
-    .filter(Boolean),
-);
-const EXCLUDED_ANALYTICS_EMAILS = new Set(
-  (process.env.ANALYTICS_EXCLUDED_EMAILS ?? '')
+const EXPLICIT_ALLOWED_EMAILS = new Set(
+  (process.env.ANALYTICS_ALLOWED_EMAILS ?? '')
     .split(',')
     .map((value) => value.trim().toLowerCase())
+    .filter(Boolean),
+);
+const EXCLUDED_ANALYTICS_EMAIL_DOMAINS = new Set(
+  (process.env.ANALYTICS_EXCLUDED_EMAIL_DOMAINS ?? `example.com,example.net,example.org,${DEFAULT_ALLOWED_DOMAIN}`)
+    .split(',')
+    .map((value) => value.trim().toLowerCase().replace(/^@/, ''))
     .filter(Boolean),
 );
 const EXCLUDED_ANALYTICS_EMAIL_PREFIXES = (
@@ -104,6 +103,12 @@ type ActiveSnapshot = {
   lastActiveAt: string | null;
 };
 
+function getBearerToken(request: NextRequest): string {
+  const authHeader = request.headers.get('authorization') ?? '';
+  if (!authHeader.toLowerCase().startsWith('bearer ')) return '';
+  return authHeader.slice('bearer '.length).trim();
+}
+
 function normalizeStatus(status: unknown): string {
   return String(status ?? '').trim().toLowerCase();
 }
@@ -171,6 +176,13 @@ function conversion(numerator: number, denominator: number): number {
   return Number((numerator / denominator).toFixed(4));
 }
 
+function isAllowedEmail(email: string): boolean {
+  const normalized = email.trim().toLowerCase();
+  if (!normalized) return false;
+  if (EXPLICIT_ALLOWED_EMAILS.has(normalized)) return true;
+  return normalized.endsWith(`@${DEFAULT_ALLOWED_DOMAIN}`);
+}
+
 function isUuidLike(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
@@ -189,16 +201,12 @@ function isRealAnalyticsUser(row: SignupUserRow): boolean {
   const email = String(row.email ?? '').trim().toLowerCase();
   const name = String(row.name ?? '').trim().toLowerCase();
 
-  // Analytics only includes identifiable, external accounts. Email-less UUID rows
-  // are typically incomplete auth/test records and must not affect any stage.
-  const emailMatch = email.match(/^([^\s@]+)@([^\s@]+\.[^\s@]+)$/);
-  if (!emailMatch) return false;
-
-  const [, localPart, domain] = emailMatch;
-  if (EXCLUDED_ANALYTICS_EMAILS.has(email)) return false;
-  if (EXCLUDED_ANALYTICS_EMAIL_DOMAINS.has(domain)) return false;
-  if (EXCLUDED_ANALYTICS_EMAIL_PREFIXES.some((prefix) => localPart.startsWith(prefix))) return false;
-  if (/(^|[+._-])(codex|smoke|test|testing|e2e|qa)([+._-]|$)/i.test(localPart)) return false;
+  if (email) {
+    const [localPart, domain] = email.split('@');
+    if (domain && EXCLUDED_ANALYTICS_EMAIL_DOMAINS.has(domain)) return false;
+    if (EXCLUDED_ANALYTICS_EMAIL_PREFIXES.some((prefix) => localPart.startsWith(prefix))) return false;
+    if (email.includes('+codex') || email.includes('+smoke') || email.includes('+test')) return false;
+  }
 
   if (name && EXCLUDED_ANALYTICS_NAME_PREFIXES.some((prefix) => name.startsWith(prefix))) return false;
 
@@ -224,6 +232,39 @@ function isRealPaymentRecord(payment: PaymentRow): boolean {
 
 function isRealPaymentGrant(payment: PaymentRow): boolean {
   return PAYMENT_GRANT_STATUSES.has(normalizeStatus(payment.payment_status)) && isRealPaymentRecord(payment);
+}
+
+async function authenticateAnalyticsRequest(request: NextRequest): Promise<{
+  ok: boolean;
+  status: number;
+  email: string | null;
+  message?: string;
+}> {
+  const bearerToken = getBearerToken(request);
+  if (!bearerToken || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    return { ok: false, status: 401, email: null, message: 'Missing authorization token' };
+  }
+
+  const authResponse = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${bearerToken}`,
+      apikey: SUPABASE_ANON_KEY,
+    },
+    cache: 'no-store',
+  });
+
+  if (!authResponse.ok) {
+    return { ok: false, status: 401, email: null, message: 'Unauthorized' };
+  }
+
+  const user = (await authResponse.json()) as { email?: string | null };
+  const email = (user.email ?? '').trim().toLowerCase();
+  if (!email || !isAllowedEmail(email)) {
+    return { ok: false, status: 403, email: email || null, message: 'Forbidden' };
+  }
+
+  return { ok: true, status: 200, email };
 }
 
 async function fetchSignupUserIds(
@@ -355,50 +396,6 @@ async function fetchPaymentsByCreatedAtWindow(
   return rows;
 }
 
-async function fetchPaymentOpenedUserIds(
-  supabase: SupabaseClient,
-  fromIso: string,
-  toExclusiveIso: string,
-): Promise<Set<string>> {
-  const authIds = new Set<string>();
-  let offset = 0;
-
-  while (true) {
-    const { data, error } = await supabase
-      .from('analytics_events')
-      .select('user_id, created_at')
-      .eq('event_name', 'payment_page_opened')
-      .gte('created_at', fromIso)
-      .lt('created_at', toExclusiveIso)
-      .order('created_at', { ascending: true })
-      .range(offset, offset + BATCH_SIZE - 1);
-
-    if (error) throw new Error(`Failed loading payment-opened events: ${error.message}`);
-    if (!data?.length) break;
-    for (const row of data) {
-      const authId = String(row.user_id ?? '').trim();
-      if (authId) authIds.add(authId);
-    }
-    if (data.length < BATCH_SIZE) break;
-    offset += BATCH_SIZE;
-  }
-
-  const userIds = new Set<string>();
-  for (const chunk of chunkArray(Array.from(authIds), USER_FETCH_CHUNK)) {
-    const { data, error } = await supabase
-      .from('users')
-      .select('id, auth_id, email, name, deleted')
-      .in('auth_id', chunk);
-    if (error) throw new Error(`Failed resolving payment-opened users: ${error.message}`);
-    for (const row of (data ?? []) as SignupUserRow[]) {
-      if (!isRealAnalyticsUser(row)) continue;
-      const id = String(row.id ?? '').trim();
-      if (id) userIds.add(id);
-    }
-  }
-  return userIds;
-}
-
 async function fetchPaymentsForSnapshot(
   supabase: SupabaseClient,
   toExclusiveIso: string,
@@ -442,10 +439,7 @@ async function fetchUsersByIds(supabase: SupabaseClient, ids: string[]): Promise
   const chunks = chunkArray(ids, USER_FETCH_CHUNK);
 
   for (const chunk of chunks) {
-    const { data, error } = await supabase
-      .from('users')
-      .select('id, auth_id, email, name, created_at')
-      .in('id', chunk);
+    const { data, error } = await supabase.from('users').select('*').in('id', chunk);
     if (error) throw new Error(`Failed loading users for drilldown: ${error.message}`);
 
     for (const row of (data ?? []) as UserRecord[]) {
@@ -532,7 +526,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Server analytics env is missing' }, { status: 500 });
   }
 
-  const auth = await requireAnalyticsPermission(request, 'users.list');
+  const auth = await authenticateAnalyticsRequest(request);
   if (!auth.ok) {
     return NextResponse.json({ error: auth.message ?? 'Unauthorized' }, { status: auth.status });
   }
@@ -560,23 +554,28 @@ export async function GET(request: NextRequest) {
   const fromMs = Date.parse(fromIso);
   const toExclusiveMs = Date.parse(toExclusiveIso);
 
-  const supabase = auth.supabase;
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false },
+  });
 
   try {
-    const [signupUserIds, paymentOpenedEventUsers, paymentsInWindow, paymentsForSnapshot, activeSnapshotMap] = await Promise.all([
+    const [signupUserIds, paymentsInWindow, paymentsForSnapshot, activeSnapshotMap] = await Promise.all([
       fetchSignupUserIds(supabase, fromIso, toExclusiveIso),
-      fetchPaymentOpenedUserIds(supabase, fromIso, toExclusiveIso),
       fetchPaymentsByCreatedAtWindow(supabase, fromIso, toExclusiveIso),
       fetchPaymentsForSnapshot(supabase, toExclusiveIso),
       fetchWeeklyActiveUserSnapshotMap(supabase, fromIso, toExclusiveIso),
     ]);
 
-    const paymentPageOpenedUsers = new Set(Array.from(paymentOpenedEventUsers).filter((id) => signupUserIds.has(id)));
+    const paymentPageOpenedUsers = new Set<string>();
     const paidUsers = new Set<string>();
 
     for (const payment of paymentsInWindow) {
       const userId = typeof payment.user_id === 'string' ? payment.user_id.trim() : '';
       if (!userId || !signupUserIds.has(userId)) continue;
+
+      if (!isRealPaymentRecord(payment)) continue;
+
+      paymentPageOpenedUsers.add(userId);
 
       if (isRealPaymentGrant(payment)) {
         paidUsers.add(userId);
@@ -692,9 +691,9 @@ export async function GET(request: NextRequest) {
         source_breakdown,
         users,
         notes: [
-          'payment_page_opened uses first-party paywall events captured from the payment route.',
+          'payment_page_opened is currently inferred from non-bypass payment records in the selected window.',
           'active is WAU: unique real users with at least one user message in the selected window.',
-          'Only users with a valid external email are included; internal, test, automation, incomplete, and BYPASS records are excluded.',
+          'Test/internal automation users are excluded from user counts; BYPASS payment rows do not count as opened or paid.',
         ],
       },
       {
