@@ -69,6 +69,8 @@ test('recognizes contextual agent continuations', () => {
     'buy that personal one',
     'something healthy and homely',
     'check the net and tell',
+    'go ahead write a draft for Rajat',
+    'send it',
   ]) assert.equal(isContextualAgentCandidate(request), true, request);
   assert.equal(isContextualAgentCandidate('Tell me about Buddhist philosophy'), false);
 });

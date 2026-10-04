@@ -80,6 +80,7 @@ export function isAgentCandidate(message: string): boolean {
 export function isContextualAgentCandidate(message: string): boolean {
   const value = message.toLowerCase().replace(/\s+/g, ' ').trim();
   if (!value || value.length > 600) return false;
+  if (/^(?:(?:go ahead|please)\s+)?(?:write|prepare|make)\s+(?:me\s+)?(?:a\s+)?draft\s+(?:for|to)\s+[\p{L}'’-]+\b|^(?:(?:go ahead|please)\s+)?send\s+(?:it|this|that)(?:\s+(?:email|mail|draft|reply))?[.!\s]*$/iu.test(value)) return true;
   return /\b(?:reply|respond|write back|send)\b.{0,220}\b(?:him|her|them|this|that|the|guy|person|candidate|sender|thread)\b|\b(?:reply|respond|write back)\s+(?:to\s+)?[\p{L}'’-]+\b/iu.test(value)
     || /\b(?:schedule|reschedule|move|update|edit|cancel|delete|add)\b.{0,180}\b(?:it|that|this|meeting|event|appointment)\b/i.test(value)
     || /\b(?:buy|order|book|reserve|choose|pick|select|go with|take|get)\b.{0,180}\b(?:it|that|this|one|option|first|second|third|cheapest|best)\b|^(?:go ahead|do it|proceed|continue|yes,?\s+(?:do|book|buy|order|send)\s+it)[.!\s]*$/i.test(value)
