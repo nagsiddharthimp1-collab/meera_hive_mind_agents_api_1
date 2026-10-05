@@ -1,6 +1,7 @@
 'use client';
 
 import { Conversation } from '@/components/Conversation';
+import { PublicSiteFallback } from '@/components/PublicSiteFallback';
 import { PricingModalProvider } from '@/contexts/PricingModalContext';
 import { useSubscriptionStatus } from '@/hooks/useSubscriptionStatus';
 import {
@@ -96,11 +97,7 @@ export default function Home() {
 
   // While checking session, show loader
   if (sessionStatus !== 'authenticated') {
-    return (
-      <div className="min-h-[100dvh] flex items-center justify-center bg-background">
-        <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
-      </div>
-    );
+    return <PublicSiteFallback />;
   }
   if (isLoadingSubscription || subscriptionData?.requires_payment_for_chat === true) {
     return (

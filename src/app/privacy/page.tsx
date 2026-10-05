@@ -18,9 +18,9 @@ export default function Privacy() {
             Privacy Policy for {appNameOS}
           </H1>
           <div className="mt-10 space-y-7 text-base text-primary/80">
-            <p>Effective Date: 1/1/2025</p>
+            <p>Effective Date: October 5, 2026</p>
             <p>
-              At {appNameOS}, we value your privacy and are committed to protecting your personal data. This privacy
+              Meera Labs Inc. operates {appNameOS}. We value your privacy and are committed to protecting your personal data. This privacy
               policy outlines how we collect, use, store, and protect your information when you use our services.
             </p>
 
@@ -158,14 +158,7 @@ export default function Privacy() {
               </a>
             </p>
             <p className="mt-4">
-              <strong>Address</strong>:
-            </p>
-            <p>
-              FLAT-F/10, 3RD FLOOR
-              <br />
-              P-167, PANDIT ISHAN CHANDRA ROAD RISHRA
-              <br />
-              HOOGHLY, WEST BENGAL - 712248
+              <strong>Registered legal address</strong>: 8 The Green, Ste R, Dover, DE 19901, United States.
             </p>
           </div>
         </div>

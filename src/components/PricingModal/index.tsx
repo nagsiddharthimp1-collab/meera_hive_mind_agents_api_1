@@ -9,12 +9,13 @@ import { load } from '@cashfreepayments/cashfree-js';
 import { useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
 import Image from 'next/image';
+import Link from 'next/link';
 import { ReactNode, useEffect, useRef, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { HiArrowLeft } from 'react-icons/hi2';
 import meeraLogo from '../../../public/icons/meera.svg';
 import starBg from '../../../public/images/star.png';
-import { COUPON_CODES, PLAN_COMPARE_AT_PRICES, PLAN_PRICES } from './constants';
+import { COUPON_CODES, PLAN_PRICES } from './constants';
 
 // Helper functions
 const calculateDiscountedPrice = (price: number, discountPercentage: number): number => {
@@ -22,18 +23,13 @@ const calculateDiscountedPrice = (price: number, discountPercentage: number): nu
   return Math.round(price - discount);
 };
 
-const getPriceDisplay = (plan: PlanType, basePrice: number, discountedPrice: number | null): ReactNode => {
-  const compareAtPrice = PLAN_COMPARE_AT_PRICES[plan];
+const getPriceDisplay = (basePrice: number, discountedPrice: number | null): ReactNode => {
   const currentPrice = discountedPrice ?? basePrice;
-  const discountPercent = Math.max(0, Math.round(((compareAtPrice - currentPrice) / compareAtPrice) * 100));
 
   return (
     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-      <span className="line-through text-white/45">₹{compareAtPrice}</span>
       <span className="text-white font-semibold">₹{currentPrice}</span>
-      <span className="rounded-full border border-green-300/30 bg-green-300/10 px-2 py-0.5 text-[10px] font-semibold leading-none text-green-200">
-        {discountPercent}% off
-      </span>
+      {currentPrice < basePrice && <span className="text-green-200 text-xs font-medium">Coupon applied</span>}
       {currentPrice === 0 && <span className="text-green-300 text-xs font-medium">(Free)</span>}
     </div>
   );
@@ -526,13 +522,13 @@ export const PricingModal = ({ isOpen, onClose, isClosable, source }: PricingMod
                     >
                       <div className="flex flex-col items-start">
                         <span className="text-white text-lg sm:text-xl font-medium mb-1 [@media(max-height:760px)]:!mb-0.5 [@media(max-height:760px)]:!text-lg">
-                          Monthly
+                          30-day access
                         </span>
                         <div className="text-white/80 text-base sm:text-lg [@media(max-height:760px)]:!text-base">
-                          {getPriceDisplay('monthly', PLAN_PRICES.monthly, discountedPrices.monthly)}
+                          {getPriceDisplay(PLAN_PRICES.monthly, discountedPrices.monthly)}
                         </div>
                         <div className="text-white/55 text-[11px] sm:text-xs leading-tight mt-1 [@media(max-height:760px)]:!mt-0.5">
-                          Text | Web | Images
+                          One-time purchase · No auto-renewal · Text | Web | Images
                         </div>
                       </div>
 
@@ -565,10 +561,10 @@ export const PricingModal = ({ isOpen, onClose, isClosable, source }: PricingMod
                           Lifetime
                         </span>
                         <div className="text-white/80 text-base sm:text-lg [@media(max-height:760px)]:!text-base">
-                          {getPriceDisplay('lifetime', PLAN_PRICES.lifetime, discountedPrices.lifetime)}
+                          {getPriceDisplay(PLAN_PRICES.lifetime, discountedPrices.lifetime)}
                         </div>
                         <div className="text-white/55 text-[11px] sm:text-xs leading-tight mt-1 [@media(max-height:760px)]:!mt-0.5">
-                          Text | Web | Images
+                          One-time purchase · Text | Web | Images
                         </div>
                       </div>
 
@@ -642,6 +638,12 @@ export const PricingModal = ({ isOpen, onClose, isClosable, source }: PricingMod
                         ? 'Continue Our Journey'
                         : 'Continue Our Journey'}
                   </button>
+                  <p className="text-center text-[11px] leading-5 text-white/60">
+                    Sold by Meera Labs Inc. ·{' '}
+                    <Link href="/terms" target="_blank" className="underline">Terms</Link> ·{' '}
+                    <Link href="/refund-policy" target="_blank" className="underline">Refunds</Link> ·{' '}
+                    <Link href="/privacy" target="_blank" className="underline">Privacy</Link>
+                  </p>
 
                   {/* Logout */}
                   <div className="flex justify-center items-center gap-2 pt-0 text-xs text-white/40">

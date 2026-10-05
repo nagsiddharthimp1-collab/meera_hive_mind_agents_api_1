@@ -1,6 +1,7 @@
 'use client';
 
 import { SuccessDialog } from '@/components/SuccessDialog';
+import { PublicSiteFallback } from '@/components/PublicSiteFallback';
 import { OpenInBrowserDialog } from '@/components/auth/OpenInBrowserDialog';
 import {
   breakAuthRedirectLoop,
@@ -503,9 +504,12 @@ function SignInClient() {
           <footer className="mx-auto mt-14 flex w-full max-w-6xl flex-col items-center justify-between gap-5 border-t border-primary/10 pt-7 text-xs text-primary/45 sm:mt-16 sm:flex-row">
             <div className="inline-flex items-center gap-2">
               <Image src="/icons/meera.svg" alt="" width={20} height={20} className="h-5 w-5" />
-              <span>Meera · Your personal companion</span>
+              <span>Meera · Your personal companion · By Meera Labs Inc.</span>
             </div>
             <nav className="flex items-center gap-6" aria-label="Legal">
+              <Link href="/pricing" className="transition-colors hover:text-primary">
+                Pricing
+              </Link>
               <Link href="/whitepaper" className="transition-colors hover:text-primary">
                 Whitepaper
               </Link>
@@ -514,6 +518,9 @@ function SignInClient() {
               </Link>
               <Link href="/privacy" className="transition-colors hover:text-primary">
                 Privacy
+              </Link>
+              <Link href="/refund-policy" className="transition-colors hover:text-primary">
+                Refunds
               </Link>
             </nav>
           </footer>
@@ -537,7 +544,7 @@ function SignInClient() {
 
 export default function SignIn() {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<PublicSiteFallback />}>
       <SignInClient />
     </Suspense>
   );

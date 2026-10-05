@@ -19,10 +19,10 @@ export default function Terms() {
             Terms and Conditions for {appNameOS}
           </H1>
           <div className="mt-10 space-y-7 text-base text-primary/80">
-            <p>Effective Date: 1/1/2025</p>
+            <p>Effective Date: October 5, 2026</p>
 
             <p>
-              Welcome to {appNameOS}. By accessing or using {appNameOS}, you agree to comply with and be bound by the
+              {appNameOS} is provided by Meera Labs Inc., a Delaware corporation. By accessing or using {appNameOS}, you agree to comply with and be bound by the
               following Terms and Conditions. Please read them carefully before using our platform.
             </p>
 
@@ -69,26 +69,33 @@ export default function Terms() {
               </li>
             </ul>
 
-            <h2 className="text-2xl font-bold text-primary mt-12 mb-4">6. Payment and Subscription</h2>
+            <h2 className="text-2xl font-bold text-primary mt-12 mb-4">6. Payment and Access</h2>
             <ul className="list-disc space-y-2 pl-5">
               <li>
-                {appNameOS} offers a single subscription plan:
+                {appNameOS} offers two paid plans:
                 <br />
-                {/* Monthly Plan: ₹99 per month
-                <br /> */}
-                Lifetime Plan: ₹499
+                30-day access: ₹129 as a one-time purchase
+                <br />
+                Lifetime access: ₹499 as a one-time purchase
                 <br/>
-                Payments must be made in accordance with the pricing details provided at the time of purchase.
-                Subscription payments are non-refundable unless required by applicable laws.
+                Both plans include text chat, web, and images. Access begins after payment is confirmed. The 30-day plan
+                expires after 30 days unless you purchase access again. Neither plan renews automatically. The final
+                price, including any discount, is displayed before payment.
               </li>
               <li>
                 For refund requests, please contact us at{' '}
                 <a href="mailto:siddharth.nag@himeera.com" className="text-primary hover:text-primary/70">
                   siddharth.nag@himeera.com
                 </a>{' '}
-                with your subscription details and reason for the request. If you are approved, then your refund will be
+                with your purchase details and reason for the request. Payments are generally non-refundable unless
+                required by applicable law. If a refund is approved, it will be
                 processed, and a credit will automatically be applied to your credit card or original method of payment,
                 within 7 working days.
+              </li>
+              <li>
+                For an unrecognized charge or other payment dispute, email us at{' '}
+                <a href="mailto:siddharth.nag@himeera.com" className="text-primary hover:text-primary/70">siddharth.nag@himeera.com</a>{' '}
+                with the purchase date and account email so we can investigate.
               </li>
             </ul>
 
@@ -138,19 +145,10 @@ export default function Terms() {
               posted constitutes your acceptance of the updated terms.
             </p>
 
-            <h2 className="text-2xl font-bold text-primary mt-12 mb-4">12. Governing Law</h2>
+            <h2 className="text-2xl font-bold text-primary mt-12 mb-4">12. Business Identity</h2>
             <p>
-              Based on our Udyam Registration Certificate, our business, Call {appName}OS, is registered under the
-              jurisdiction of West Bengal, India.
-              <br />
-              <br />
-              Official Address:
-              <br />
-              FLAT-F/10, 3RD FLOOR
-              <br />
-              P-167, PANDIT ISHAN CHANDRA ROAD RISHRA
-              <br />
-              HOOGHLY, WEST BENGAL - 712248
+              These terms are issued by Meera Labs Inc., a corporation incorporated in Delaware, United States.
+              Its registered legal address is 8 The Green, Ste R, Dover, DE 19901, United States.
             </p>
 
             <h2 className="text-2xl font-bold text-primary mt-12 mb-4">13. Contact Us</h2>

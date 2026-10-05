@@ -3,11 +3,6 @@ export const PLAN_PRICES = {
   lifetime: 499,
 } as const;
 
-export const PLAN_COMPARE_AT_PRICES = {
-  monthly: 999,
-  lifetime: 2999,
-} as const;
-
 export const COUPON_CODES = {
   BYPASS: 100, // 100% discount
 } as const;
