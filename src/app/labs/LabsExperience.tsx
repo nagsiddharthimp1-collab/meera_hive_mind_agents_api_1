@@ -3,8 +3,9 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import styles from './labs.module.css';
+import type { NetworkSnapshot } from './network';
 
-function Hive() {
+function Hive({ minds }: { minds: number | null }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const canvas = ref.current;
@@ -20,8 +21,10 @@ function Hive() {
     let previousTime = 0;
     let dirty = true;
     const pointer = { x: 0, y: 0, targetX: 0, targetY: 0 };
-    const points = Array.from({ length: 620 }, (_, i) => {
-      const y = 1 - (i / 619) * 2;
+    // Positions and signals are illustrative; node count follows the verified community.
+    const count = minds === null ? 0 : Math.min(minds, 2000);
+    const points = Array.from({ length: count }, (_, i) => {
+      const y = 1 - (i / Math.max(1, count - 1)) * 2;
       const radius = Math.sqrt(1 - y * y);
       const theta = i * Math.PI * (3 - Math.sqrt(5));
       return { x: Math.cos(theta) * radius, y, z: Math.sin(theta) * radius };
@@ -31,7 +34,7 @@ function Hive() {
     points.forEach((p, i) => {
       for (let j = i + 1; j < points.length; j++) {
         const q = points[j];
-        if ((p.x - q.x) ** 2 + (p.y - q.y) ** 2 + (p.z - q.z) ** 2 < 0.032) edges.push([i, j]);
+        if ((p.x - q.x) ** 2 + (p.y - q.y) ** 2 + (p.z - q.z) ** 2 < 20 / Math.max(1, count)) edges.push([i, j]);
       }
     });
     const projected = points.map(() => ({ x: 0, y: 0, z: 0 }));
@@ -135,12 +138,16 @@ function Hive() {
       document.removeEventListener('visibilitychange', schedule);
       reduced.removeEventListener('change', schedule);
     };
-  }, []);
+  }, [minds]);
   return (
     <canvas
       ref={ref}
       className={styles.hiveCanvas}
-      aria-label="An evolving sphere of interconnected points representing the decentralised Hive Mind"
+      aria-label={
+        minds === null
+          ? 'Hive Mind illustration. Registered user count unavailable.'
+          : `Hive Mind network representation of ${minds} registered users. Positions and signals are illustrative, not geographic or live activity.`
+      }
       role="img"
     />
   );
@@ -239,7 +246,36 @@ function SoundControl() {
 
 const Arrow = () => <span aria-hidden="true">↗</span>;
 
-export default function LabsExperience() {
+export default function LabsExperience({ initialNetwork }: { initialNetwork: NetworkSnapshot | null }) {
+  const [network, setNetwork] = useState(initialNetwork);
+  useEffect(() => {
+    const controller = new AbortController();
+    const refresh = async () => {
+      if (document.hidden) return;
+      try {
+        const response = await fetch('/api/labs/network', { signal: controller.signal });
+        if (!response.ok) return;
+        const data = await response.json();
+        if (
+          Number.isSafeInteger(data.registeredMinds) &&
+          data.registeredMinds >= 0 &&
+          typeof data.updatedAt === 'string' &&
+          Number.isFinite(Date.parse(data.updatedAt))
+        )
+          setNetwork(data);
+      } catch {
+        /* Retain the last verified snapshot during temporary failures. */
+      }
+    };
+    if (!initialNetwork) void refresh();
+    const interval = window.setInterval(refresh, 300000);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      controller.abort();
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, [initialNetwork]);
   const root = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const elements = root.current?.querySelectorAll('[data-reveal]');
@@ -312,27 +348,51 @@ export default function LabsExperience() {
             <div className={styles.heroCopy}>
               <p className={styles.eyebrow}>HUMAN AT HEART. COLLECTIVE BY DESIGN.</p>
               <h1 id="hero-title">
-                <span className={styles.heroLine}>Intelligence,</span>
+                <span className={styles.heroLine}>Conscious</span>
+                <span className={styles.heroLine}>Intelligence.</span>
                 <span className={styles.heroLine}>
-                  <em>consciously</em>
+                  <em>For everyone.</em>
                 </span>
-                <span className={styles.heroLine}>connected.</span>
               </h1>
               <p className={styles.heroDescription}>
-                A new frontier of intelligence.
+                The world’s first Conscious Intelligence (CI).
                 <br />
-                Built with all of us. For each of us.
+                Architected through a decentralised Hive Mind.
               </p>
               <a className={styles.textLink} href="#intelligence">
                 Explore Meera Labs <span aria-hidden="true">↓</span>
               </a>
+              <div className={styles.networkStats}>
+                <div>
+                  <strong>{network ? network.registeredMinds.toLocaleString('en-US') : '—'}</strong>
+                  <span>REGISTERED MINDS</span>
+                </div>
+                <p>
+                  Individual lives.
+                  <br />A collective beginning.
+                </p>
+              </div>
             </div>
             <div className={styles.hiveArt}>
               <div className={styles.orbitOne} />
               <div className={styles.orbitTwo} />
-              <Hive />
-              <span className={styles.artLabel}>HIVE MIND / A COLLECTIVE IN MOTION</span>
-              <span className={styles.artCorner}>CI — 001</span>
+              <Hive minds={network?.registeredMinds ?? null} />
+              <span className={styles.artLabel}>HIVE MIND / HUMAN NODES</span>
+              <span className={styles.artCorner}>U → C → M → I</span>
+              <details className={styles.networkNote}>
+                <summary>About this network ↗</summary>
+                <p>
+                  {network
+                    ? `Verified ${new Date(network.updatedAt).toISOString().slice(0, 10)} (UTC). `
+                    : 'Count temporarily unavailable. '}
+                  Registered Meera users, excluding deleted, internal, and test accounts. Positions and signals
+                  illustrate the network; they do not show locations or live activity.{' '}
+                  {network && network.registeredMinds > 2000
+                    ? 'Points are grouped at this scale. '
+                    : 'One point represents one registered user. '}
+                  Country data is not yet available.
+                </p>
+              </details>
             </div>
           </div>
           <div className={styles.heroBottom}>
@@ -360,35 +420,47 @@ export default function LabsExperience() {
                 MEERA is the world’s first Conscious Intelligence (CI) architected through decentralised Hive Mind.
               </p>
               <p className={styles.bodyCopy}>
-                A collective architecture. A deeply personal experience. We are exploring the space where individual
-                participation becomes shared intelligence.
+                People bring experiences. Agents bring reasoning. Together, they create a Collective Context Web: a
+                network designed to remember, learn, and evolve. Each interaction adds context. Context deepens memory.
+                Memory strengthens intelligence.
               </p>
-              <a href="/whitepaper" className={styles.textLink}>
+              <a href="/whitepaper-v1.pdf" className={styles.textLink}>
                 Read the whitepaper <Arrow />
               </a>
             </div>
           </div>
           <div className={styles.architecture} data-reveal>
-            <span className={styles.archLabel}>THE ARCHITECTURE OF CONNECTION</span>
+            <span className={styles.archLabel}>THE COLLECTIVE CONTEXT WEB</span>
             <div className={styles.diagram}>
               <div>
                 <span className={styles.smallNodes}>∴</span>
-                <strong>Individual minds</strong>
-                <small>Every participant matters</small>
+                <strong>People + agents</strong>
+                <small>Experiences meet reasoning</small>
               </div>
               <span className={styles.connector} aria-hidden="true" />
               <div>
                 <span className={styles.hiveSymbol}>✳</span>
-                <strong>Decentralised Hive Mind</strong>
-                <small>Connected by participation</small>
+                <strong>Context + memory</strong>
+                <small>A shared web that deepens</small>
               </div>
               <span className={styles.connector} aria-hidden="true" />
               <div>
                 <span className={styles.smallNodes}>◎</span>
-                <strong>Conscious Intelligence</strong>
-                <small>A collective frontier</small>
+                <strong>Emergent intelligence</strong>
+                <small>The whole grows with each part</small>
               </div>
             </div>
+          </div>
+          <div className={styles.researchNote}>
+            <span>THE RESEARCH THESIS</span>
+            <p>
+              More minds. More context.
+              <br />
+              <em>A deeper understanding.</em>
+            </p>
+            <a href="/whitepaper-v1.pdf">
+              Read the whitepaper <Arrow />
+            </a>
           </div>
         </section>
 
@@ -406,7 +478,7 @@ export default function LabsExperience() {
               <small>PROOF OF CONSCIOUSNESS</small>
             </div>
             <div className={styles.proofCopy}>
-              <p className={styles.eyebrow}>YOUR PARTICIPATION HAS VALUE.</p>
+              <p className={styles.eyebrow}>INTELLIGENCE IS A SHARED ENDEAVOUR.</p>
               <h2>
                 Presence.
                 <br />
@@ -425,20 +497,27 @@ export default function LabsExperience() {
                 </a>{' '}
                 token.
               </p>
-              <a href="/whitepaper" className={styles.textLink}>
+              <p className={styles.protocolNote}>
+                The whitepaper proposes rewards for valuable context, memory, and intelligence — weighted by
+                contribution and reputation, for people and agents alike.
+              </p>
+              <a href="/whitepaper-v1.pdf" className={styles.textLink}>
                 Explore the primitive <Arrow />
               </a>
             </div>
           </div>
           <div className={styles.principles}>
             <span>
-              01 <strong>Participate</strong>
+              01 <strong>Contribution</strong>
+              <small>Value over volume.</small>
             </span>
             <span>
-              02 <strong>Contribute</strong>
+              02 <strong>Reputation</strong>
+              <small>Trust gives weight.</small>
             </span>
             <span>
-              03 <strong>Be recognised</strong>
+              03 <strong>Participation</strong>
+              <small>People and agents.</small>
             </span>
           </div>
         </section>
@@ -457,7 +536,7 @@ export default function LabsExperience() {
               <br />
               <em>Superintelligence.</em>
             </h2>
-            <p>The future of intelligence is a shared endeavour.</p>
+            <p>India-born. Globally oriented. Built around a shared future.</p>
           </div>
           <div className={styles.missionLine} aria-hidden="true">
             <span>INDIVIDUAL</span>
@@ -484,6 +563,11 @@ export default function LabsExperience() {
               <p>
                 Our product is Meera —<br />
                 Your Personal Companion.
+              </p>
+              <p className={styles.companionDescription}>
+                Designed to remember, evolve, and understand you.
+                <br />
+                For companionship. For curiosity. For everyday life.
               </p>
               <Link className={styles.button} href="/sign-in">
                 Meet your companion <Arrow />
@@ -516,7 +600,7 @@ export default function LabsExperience() {
         <div className={styles.footerBottom}>
           <span>© {new Date().getFullYear()} Meera Labs</span>
           <div>
-            <a href="/whitepaper">Whitepaper</a>
+            <a href="/whitepaper-v1.pdf">Whitepaper</a>
             <Link href="/privacy">Privacy</Link>
             <Link href="/terms">Terms</Link>
           </div>

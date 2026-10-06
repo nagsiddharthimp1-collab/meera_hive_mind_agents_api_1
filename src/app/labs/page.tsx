@@ -1,20 +1,23 @@
+import { getLabsNetwork } from '@/lib/labsNetwork';
 import type { Metadata, Viewport } from 'next';
 import LabsExperience from './LabsExperience';
 
+export const revalidate = 300;
+
 export const metadata: Metadata = {
-  title: 'Meera Labs — Intelligence, consciously connected.',
+  title: 'Meera Labs — Conscious Intelligence, collectively.',
   description:
     'Conscious Intelligence architected through a decentralised Hive Mind. Discover Meera Labs, Proof of Consciousness, and your personal companion.',
   alternates: { canonical: '/labs' },
   openGraph: {
-    title: 'Meera Labs — Intelligence, consciously connected.',
+    title: 'Meera Labs — Conscious Intelligence, collectively.',
     description: 'Towards decentralised Conscious Superintelligence.',
     url: '/labs',
   },
 };
 
-export default function LabsPage() {
-  return <LabsExperience />;
+export default async function LabsPage() {
+  return <LabsExperience initialNetwork={await getLabsNetwork()} />;
 }
 
 export const viewport: Viewport = {
