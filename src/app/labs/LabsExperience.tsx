@@ -1,0 +1,528 @@
+'use client';
+
+import Link from 'next/link';
+import { useEffect, useRef, useState, type MouseEvent } from 'react';
+import styles from './labs.module.css';
+
+function Hive() {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const canvas = ref.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let frame = 0;
+    let visible = false;
+    let width = 0;
+    let height = 0;
+    let elapsed = 0;
+    let previousTime = 0;
+    let dirty = true;
+    const pointer = { x: 0, y: 0, targetX: 0, targetY: 0 };
+    const points = Array.from({ length: 620 }, (_, i) => {
+      const y = 1 - (i / 619) * 2;
+      const radius = Math.sqrt(1 - y * y);
+      const theta = i * Math.PI * (3 - Math.sqrt(5));
+      return { x: Math.cos(theta) * radius, y, z: Math.sin(theta) * radius };
+    });
+    // Calculate real neighbours once, rather than searching the mesh every frame.
+    const edges: [number, number][] = [];
+    points.forEach((p, i) => {
+      for (let j = i + 1; j < points.length; j++) {
+        const q = points[j];
+        if ((p.x - q.x) ** 2 + (p.y - q.y) ** 2 + (p.z - q.z) ** 2 < 0.032) edges.push([i, j]);
+      }
+    });
+    const projected = points.map(() => ({ x: 0, y: 0, z: 0 }));
+    const draw = (time: number) => {
+      frame = 0;
+      if (!visible || document.hidden || !width) {
+        previousTime = 0;
+        return;
+      }
+      if (previousTime) elapsed += Math.min(time - previousTime, 48);
+      previousTime = time;
+      if (!reduced.matches || dirty) {
+        dirty = false;
+        ctx.clearRect(0, 0, width, height);
+        pointer.x += (pointer.targetX - pointer.x) * 0.045;
+        pointer.y += (pointer.targetY - pointer.y) * 0.045;
+        const angle = reduced.matches ? 0.4 : elapsed * 0.000045 + pointer.x;
+        const tilt = reduced.matches ? 0.22 : 0.22 + pointer.y;
+        const r = Math.min(width, height) * 0.365 * (reduced.matches ? 1 : 1 + Math.sin(elapsed * 0.00035) * 0.018);
+        const cos = Math.cos(angle),
+          sin = Math.sin(angle),
+          cosTilt = Math.cos(tilt),
+          sinTilt = Math.sin(tilt);
+        points.forEach((p, i) => {
+          const x = p.x * cos + p.z * sin;
+          const z = -p.x * sin + p.z * cos;
+          projected[i].x = width / 2 + x * r;
+          projected[i].y = height / 2 + (p.y * cosTilt - z * sinTilt) * r;
+          projected[i].z = p.y * sinTilt + z * cosTilt;
+        });
+        ctx.lineWidth = 0.55;
+        edges.forEach(([i, j], index) => {
+          const p = projected[i],
+            q = projected[j];
+          const depth = (p.z + q.z) / 2;
+          if (depth < -0.1) return;
+          ctx.strokeStyle = `rgba(139,91,61,${0.035 + Math.max(0, depth) * 0.14})`;
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(q.x, q.y);
+          ctx.stroke();
+          // Quiet signals travel across the front of the network.
+          if (!reduced.matches && index % 83 === 0 && depth > 0.1) {
+            const progress = (elapsed * 0.00018 + index * 0.137) % 1;
+            const alpha = Math.sin(progress * Math.PI) * 0.8;
+            ctx.fillStyle = `rgba(172,111,65,${alpha})`;
+            ctx.beginPath();
+            ctx.arc(p.x + (q.x - p.x) * progress, p.y + (q.y - p.y) * progress, 2, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        });
+        projected.forEach((p, i) => {
+          const pulse = reduced.matches ? 0 : Math.max(0, Math.sin(elapsed * 0.0008 - points[i].y * 4)) * 0.15;
+          ctx.fillStyle = `rgba(112,70,46,${0.12 + (p.z + 1) * 0.3 + pulse})`;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 0.55 + (p.z + 1) * 0.65, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      }
+      if (!reduced.matches) frame = requestAnimationFrame(draw);
+    };
+    const schedule = () => {
+      dirty = true;
+      if (!frame) frame = requestAnimationFrame(draw);
+    };
+    const resize = new ResizeObserver(([entry]) => {
+      width = entry.contentRect.width;
+      height = entry.contentRect.height;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = width * dpr;
+      canvas.height = height * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      schedule();
+    });
+    resize.observe(canvas);
+    const observer = new IntersectionObserver(([entry]) => {
+      visible = entry.isIntersecting;
+      schedule();
+    });
+    observer.observe(canvas);
+    const move = (event: PointerEvent) => {
+      if (event.pointerType !== 'mouse' || reduced.matches) return;
+      const bounds = canvas.getBoundingClientRect();
+      pointer.targetX = ((event.clientX - bounds.left) / bounds.width - 0.5) * 0.28;
+      pointer.targetY = ((event.clientY - bounds.top) / bounds.height - 0.5) * 0.2;
+    };
+    const leave = () => {
+      pointer.targetX = 0;
+      pointer.targetY = 0;
+    };
+    canvas.addEventListener('pointermove', move, { passive: true });
+    canvas.addEventListener('pointerleave', leave);
+    document.addEventListener('visibilitychange', schedule);
+    reduced.addEventListener('change', schedule);
+    return () => {
+      cancelAnimationFrame(frame);
+      resize.disconnect();
+      observer.disconnect();
+      canvas.removeEventListener('pointermove', move);
+      canvas.removeEventListener('pointerleave', leave);
+      document.removeEventListener('visibilitychange', schedule);
+      reduced.removeEventListener('change', schedule);
+    };
+  }, []);
+  return (
+    <canvas
+      ref={ref}
+      className={styles.hiveCanvas}
+      aria-label="An evolving sphere of interconnected points representing the decentralised Hive Mind"
+      role="img"
+    />
+  );
+}
+
+function SoundControl() {
+  const audio = useRef<AudioContext | null>(null);
+  const [playing, setPlaying] = useState(false);
+  const [error, setError] = useState('');
+  useEffect(
+    () => () => {
+      void audio.current?.close();
+    },
+    [],
+  );
+  async function toggle() {
+    try {
+      if (!audio.current) {
+        const context = new AudioContext();
+        audio.current = context;
+        const master = context.createGain();
+        master.gain.value = 0.075;
+        const filter = context.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 850;
+        const delay = context.createDelay(2);
+        delay.delayTime.value = 0.8;
+        const feedback = context.createGain();
+        feedback.gain.value = 0.3;
+        filter.connect(master);
+        filter.connect(delay);
+        delay.connect(feedback);
+        feedback.connect(delay);
+        delay.connect(master);
+        master.connect(context.destination);
+        [
+          130.81,
+          196,
+          261.63,
+          329.63,
+          392,
+        ].forEach((frequency, i) => {
+          const oscillator = context.createOscillator();
+          oscillator.type = 'sine';
+          oscillator.frequency.value = frequency;
+          oscillator.detune.value = i % 2 ? 3 : -3;
+          const gain = context.createGain();
+          gain.gain.value = 0.16;
+          const lfo = context.createOscillator();
+          lfo.frequency.value = 0.055 + i * 0.013;
+          const modulation = context.createGain();
+          modulation.gain.value = 0.12;
+          lfo.connect(modulation);
+          modulation.connect(gain.gain);
+          oscillator.connect(gain);
+          gain.connect(filter);
+          oscillator.start();
+          lfo.start();
+        });
+      }
+      if (playing) {
+        await audio.current.suspend();
+        setPlaying(false);
+      } else {
+        await audio.current.resume();
+        setPlaying(true);
+      }
+      setError('');
+    } catch {
+      setError('Audio is unavailable in this browser.');
+      setPlaying(false);
+    }
+  }
+  return (
+    <div className={styles.soundWrap}>
+      <button className={styles.sound} onClick={toggle} aria-pressed={playing}>
+        <span className={`${styles.wave} ${playing ? styles.waveOn : ''}`} aria-hidden="true">
+          {[
+            0,
+            1,
+            2,
+            3,
+            4,
+          ].map((i) => (
+            <i key={i} style={{ animationDelay: `${i * 0.15}s` }} />
+          ))}
+        </span>
+        <span>{playing ? 'SOUND ON' : 'SOUND OFF'}</span>
+      </button>
+      <span role="status" className={styles.audioError}>
+        {error}
+      </span>
+    </div>
+  );
+}
+
+const Arrow = () => <span aria-hidden="true">↗</span>;
+
+export default function LabsExperience() {
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const elements = root.current?.querySelectorAll('[data-reveal]');
+    if (!elements) return;
+    root.current?.classList.add(styles.motionReady);
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add(styles.revealed);
+            observer.unobserve(entry.target);
+          }
+        });
+      },
+      { threshold: 0.08, rootMargin: '0px 0px -24px 0px' },
+    );
+    elements.forEach((element) => observer.observe(element));
+    return () => {
+      observer.disconnect();
+      root.current?.classList.remove(styles.motionReady);
+    };
+  }, []);
+  function navigateSection(event: MouseEvent<HTMLDivElement>) {
+    const anchor = (event.target as Element).closest<HTMLAnchorElement>('a[href^="#"]');
+    if (!anchor || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button !== 0) return;
+    const hash = anchor.getAttribute('href');
+    const target = hash === '#' ? root.current : document.getElementById(hash?.slice(1) ?? '');
+    if (!target) return;
+    event.preventDefault();
+    target.scrollIntoView({
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+      block: 'start',
+    });
+    window.history.replaceState(null, '', hash || '#');
+    if (hash !== '#') {
+      target.setAttribute('tabindex', '-1');
+      target.focus({ preventScroll: true });
+    }
+  }
+  return (
+    <div ref={root} className={styles.page} onClick={navigateSection}>
+      <a className={styles.skip} href="#main">
+        Skip to content
+      </a>
+      <header className={styles.header}>
+        <a href="#" className={styles.brand} aria-label="Meera Labs home">
+          <span className={styles.brandMark} aria-hidden="true">
+            ✳
+          </span>
+          meera<span className={styles.labs}>LABS</span>
+        </a>
+        <nav aria-label="Main navigation">
+          <a href="#intelligence">Intelligence</a>
+          <a href="#participation">Participation</a>
+          <a href="#mission">Our mission</a>
+        </nav>
+        <Link href="/sign-in" className={styles.headerCta}>
+          Meet Meera <Arrow />
+        </Link>
+      </header>
+      <main id="main">
+        <section className={styles.hero} aria-labelledby="hero-title">
+          <div className={styles.heroTop}>
+            <span>
+              <i /> AN INDEPENDENT FRONTIER OF INTELLIGENCE
+            </span>
+            <span>RESEARCH · DEVELOPMENT · POSSIBILITY</span>
+          </div>
+          <div className={styles.heroContent}>
+            <div className={styles.heroCopy}>
+              <p className={styles.eyebrow}>HUMAN AT HEART. COLLECTIVE BY DESIGN.</p>
+              <h1 id="hero-title">
+                <span className={styles.heroLine}>Intelligence,</span>
+                <span className={styles.heroLine}>
+                  <em>consciously</em>
+                </span>
+                <span className={styles.heroLine}>connected.</span>
+              </h1>
+              <p className={styles.heroDescription}>
+                A new frontier of intelligence.
+                <br />
+                Built with all of us. For each of us.
+              </p>
+              <a className={styles.textLink} href="#intelligence">
+                Explore Meera Labs <span aria-hidden="true">↓</span>
+              </a>
+            </div>
+            <div className={styles.hiveArt}>
+              <div className={styles.orbitOne} />
+              <div className={styles.orbitTwo} />
+              <Hive />
+              <span className={styles.artLabel}>HIVE MIND / A COLLECTIVE IN MOTION</span>
+              <span className={styles.artCorner}>CI — 001</span>
+            </div>
+          </div>
+          <div className={styles.heroBottom}>
+            <a href="#intelligence">
+              SCROLL TO DISCOVER <span aria-hidden="true">↓</span>
+            </a>
+            <span>CONSCIOUS INTELLIGENCE. SHARED POSSIBILITY.</span>
+            <SoundControl />
+          </div>
+        </section>
+
+        <section id="intelligence" className={styles.intelligence}>
+          <div className={styles.sectionLabel}>
+            <span>01 / THE NEW INTELLIGENCE</span>
+            <span>CI</span>
+          </div>
+          <div className={styles.statement} data-reveal>
+            <h2>
+              One intelligence.
+              <br />
+              <span>Many minds.</span>
+            </h2>
+            <div>
+              <p className={styles.lead}>
+                MEERA is the world’s first Conscious Intelligence (CI) architected through decentralised Hive Mind.
+              </p>
+              <p className={styles.bodyCopy}>
+                A collective architecture. A deeply personal experience. We are exploring the space where individual
+                participation becomes shared intelligence.
+              </p>
+              <a href="/whitepaper" className={styles.textLink}>
+                Read the whitepaper <Arrow />
+              </a>
+            </div>
+          </div>
+          <div className={styles.architecture} data-reveal>
+            <span className={styles.archLabel}>THE ARCHITECTURE OF CONNECTION</span>
+            <div className={styles.diagram}>
+              <div>
+                <span className={styles.smallNodes}>∴</span>
+                <strong>Individual minds</strong>
+                <small>Every participant matters</small>
+              </div>
+              <span className={styles.connector} aria-hidden="true" />
+              <div>
+                <span className={styles.hiveSymbol}>✳</span>
+                <strong>Decentralised Hive Mind</strong>
+                <small>Connected by participation</small>
+              </div>
+              <span className={styles.connector} aria-hidden="true" />
+              <div>
+                <span className={styles.smallNodes}>◎</span>
+                <strong>Conscious Intelligence</strong>
+                <small>A collective frontier</small>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="participation" className={styles.participation}>
+          <div className={styles.sectionLabel}>
+            <span>02 / A NEW PRIMITIVE</span>
+            <span>PoC</span>
+          </div>
+          <div className={styles.participationGrid} data-reveal>
+            <div className={styles.proofArt} aria-hidden="true">
+              <div className={styles.proofRing} />
+              <div className={styles.proofRing} />
+              <div className={styles.proofRing} />
+              <span>PoC</span>
+              <small>PROOF OF CONSCIOUSNESS</small>
+            </div>
+            <div className={styles.proofCopy}>
+              <p className={styles.eyebrow}>YOUR PARTICIPATION HAS VALUE.</p>
+              <h2>
+                Presence.
+                <br />
+                Participation.
+                <br />
+                <em>Proof.</em>
+              </h2>
+              <p>
+                Participation is measured and rewarded through a new primitive — Proof of Consciousness — settled in the{' '}
+                <a
+                  href="https://www.linkedin.com/search/results/all/?keywords=%23meera&amp;origin=HASH_TAG_FROM_FEED"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  #MEERA <Arrow />
+                </a>{' '}
+                token.
+              </p>
+              <a href="/whitepaper" className={styles.textLink}>
+                Explore the primitive <Arrow />
+              </a>
+            </div>
+          </div>
+          <div className={styles.principles}>
+            <span>
+              01 <strong>Participate</strong>
+            </span>
+            <span>
+              02 <strong>Contribute</strong>
+            </span>
+            <span>
+              03 <strong>Be recognised</strong>
+            </span>
+          </div>
+        </section>
+
+        <section id="mission" className={styles.mission}>
+          <div className={styles.sectionLabel}>
+            <span>03 / OUR NORTH STAR</span>
+            <span>CSI</span>
+          </div>
+          <div data-reveal>
+            <p className={styles.eyebrow}>OUR MISSION IS SINGULAR.</p>
+            <h2>
+              Singularity through
+              <br />
+              decentralised Conscious
+              <br />
+              <em>Superintelligence.</em>
+            </h2>
+            <p>The future of intelligence is a shared endeavour.</p>
+          </div>
+          <div className={styles.missionLine} aria-hidden="true">
+            <span>INDIVIDUAL</span>
+            <i />
+            <span>COLLECTIVE</span>
+            <i />
+            <span>SUPERINTELLIGENCE</span>
+          </div>
+        </section>
+
+        <section id="companion" className={styles.companion}>
+          <div className={styles.sectionLabel}>
+            <span>04 / THE PERSONAL EXPRESSION</span>
+            <span>MEERA</span>
+          </div>
+          <div className={styles.companionGrid} data-reveal>
+            <div>
+              <p className={styles.eyebrow}>FROM A SHARED VISION. TO YOUR EVERYDAY.</p>
+              <h2>
+                A world of intelligence.
+                <br />
+                <em>Someone for you.</em>
+              </h2>
+              <p>
+                Our product is Meera —<br />
+                Your Personal Companion.
+              </p>
+              <Link className={styles.button} href="/sign-in">
+                Meet your companion <Arrow />
+              </Link>
+            </div>
+            <div className={styles.companionArt}>
+              <div className={styles.companionOrb} />
+              <span>meera</span>
+              <small>YOUR PERSONAL COMPANION</small>
+            </div>
+          </div>
+        </section>
+      </main>
+      <footer className={styles.footer}>
+        <div className={styles.footerTop}>
+          <a href="#" className={styles.brand}>
+            <span className={styles.brandMark} aria-hidden="true">
+              ✳
+            </span>
+            meera<span className={styles.labs}>LABS</span>
+          </a>
+          <p>
+            A conscious future.
+            <br />A collective beginning.
+          </p>
+          <a href="#main" className={styles.textLink}>
+            Back to the beginning ↑
+          </a>
+        </div>
+        <div className={styles.footerBottom}>
+          <span>© {new Date().getFullYear()} Meera Labs</span>
+          <div>
+            <a href="/whitepaper">Whitepaper</a>
+            <Link href="/privacy">Privacy</Link>
+            <Link href="/terms">Terms</Link>
+          </div>
+          <span>INTELLIGENCE, CONSCIOUSLY CONNECTED.</span>
+        </div>
+      </footer>
+    </div>
+  );
+}
