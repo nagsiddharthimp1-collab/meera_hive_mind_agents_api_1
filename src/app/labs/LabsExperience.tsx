@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import styles from './labs.module.css';
 import type { NetworkSnapshot } from './network';
@@ -183,13 +184,7 @@ function SoundControl() {
         feedback.connect(delay);
         delay.connect(master);
         master.connect(context.destination);
-        [
-          130.81,
-          196,
-          261.63,
-          329.63,
-          392,
-        ].forEach((frequency, i) => {
+        [130.81, 196, 261.63, 329.63, 392].forEach((frequency, i) => {
           const oscillator = context.createOscillator();
           oscillator.type = 'sine';
           oscillator.frequency.value = frequency;
@@ -225,13 +220,7 @@ function SoundControl() {
     <div className={styles.soundWrap}>
       <button className={styles.sound} onClick={toggle} aria-pressed={playing}>
         <span className={`${styles.wave} ${playing ? styles.waveOn : ''}`} aria-hidden="true">
-          {[
-            0,
-            1,
-            2,
-            3,
-            4,
-          ].map((i) => (
+          {[0, 1, 2, 3, 4].map((i) => (
             <i key={i} style={{ animationDelay: `${i * 0.15}s` }} />
           ))}
         </span>
@@ -577,8 +566,43 @@ export default function LabsExperience({ initialNetwork }: { initialNetwork: Net
             </div>
           </div>
         </section>
+        <section className={styles.indiaClosing} aria-labelledby="india-title">
+          <div className={styles.sectionLabel}>
+            <span>05 / ROOTS AND HORIZONS</span>
+            <span>INDIA → WORLD</span>
+          </div>
+          <div className={styles.indiaStatement} data-reveal>
+            <p className={styles.eyebrow}>A CIVILISATION OF POSSIBILITY.</p>
+            <h2 id="india-title">
+              From India.
+              <br />
+              <em>For the world.</em>
+            </h2>
+            <p className={styles.indiaLead}>
+              At the frontier of intelligence, we carry the courage to imagine — and the responsibility to build for
+              everyone.
+            </p>
+          </div>
+          <figure className={styles.indiaArtwork}>
+            <Image
+              src="/labs/india-for-the-world.webp"
+              width={1536}
+              height={1024}
+              sizes="(max-width: 700px) 100vw, 1100px"
+              alt="Symbolic artwork of an ivory horse with a saffron drape, with people walking toward a sunlit Indian horizon."
+            />
+            <figcaption>Rooted in India. Open to every mind.</figcaption>
+          </figure>
+        </section>
       </main>
       <footer className={styles.footer}>
+        <div className={styles.companyIdentity}>
+          <span>CORPORATE IDENTITY</span>
+          <div>
+            <strong>Meera Labs Inc.</strong>
+            <p>Legal company name</p>
+          </div>
+        </div>
         <div className={styles.footerTop}>
           <a href="#" className={styles.brand}>
             <span className={styles.brandMark} aria-hidden="true">
@@ -595,7 +619,7 @@ export default function LabsExperience({ initialNetwork }: { initialNetwork: Net
           </a>
         </div>
         <div className={styles.footerBottom}>
-          <span>© {new Date().getFullYear()} Meera Labs</span>
+          <span>© {new Date().getFullYear()} Meera Labs Inc.</span>
           <div>
             <a href="/whitepaper-v1.pdf">Whitepaper</a>
             <Link href="/privacy">Privacy</Link>
