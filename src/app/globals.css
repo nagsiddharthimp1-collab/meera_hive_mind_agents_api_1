@@ -36,6 +36,26 @@ html {
   overflow-x: hidden;
 }
 
+@media (max-width: 767px), (pointer: coarse) {
+  html.meera-chat-active,
+  body.meera-chat-active {
+    overflow: hidden;
+    overscroll-behavior-y: none;
+  }
+
+  .meera-chat-shell {
+    position: fixed;
+    inset-inline: 0;
+    top: var(--chat-viewport-top, 0px);
+    height: var(--chat-viewport-height, 100dvh);
+    overflow: hidden;
+  }
+
+  .meera-chat-shell[data-keyboard-open='true'] .meera-chat-composer {
+    padding-bottom: 0.5rem !important;
+  }
+}
+
 /* Improved scrollbar styling that matches our theme */
 /* For Webkit browsers (Chrome, Safari) */
 ::-webkit-scrollbar {

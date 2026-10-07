@@ -10,6 +10,7 @@ import { Toast } from '@/components/ui/Toast';
 import { useToast } from '@/components/ui/ToastProvider';
 import { usePricingModal } from '@/contexts/PricingModalContext';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
+import { getChatViewportHeight, isTouchChatViewport, useChatViewport } from '@/hooks/useChatViewport';
 import { useDragAndDrop } from '@/hooks/useDragAndDrop';
 import { useMessageSubmission } from '@/hooks/useMessageSubmission';
 import { useSubscriptionStatus } from '@/hooks/useSubscriptionStatus';
@@ -36,7 +37,6 @@ const SCROLL_THRESHOLD = 150;
 const FETCH_DEBOUNCE_MS = 300;
 const SCROLL_THROTTLE_MS = 16; // 60fps
 const INPUT_DEBOUNCE_MS = 16;
-const RESIZE_DEBOUNCE_MS = 100;
 const JUMP_DOM_POLL_INTERVAL_MS = 250;
 const JUMP_MAX_PAGE_LOADS = 200;
 const JUMP_SUPPRESS_AUTOLOAD_MS = 1400;
@@ -391,6 +391,7 @@ export const Conversation: React.FC = () => {
   const attachmentInputAreaRef = useRef<AttachmentInputAreaRef>(null);
   const lastOptimisticMessageIdRef = useRef<string | null>(null);
   const mainScrollRef = useRef<HTMLDivElement>(null);
+  const chatShellRef = useRef<HTMLDivElement>(null);
   const initialLoadDone = useRef(false);
   const justSentMessageRef = useRef(false);
   const spacerRef = useRef<HTMLDivElement>(null);
@@ -401,7 +402,6 @@ export const Conversation: React.FC = () => {
   const latestAssistantMessageRef = useRef<HTMLDivElement | null>(null);
 
   const requestCache = useRef<Map<string, Promise<unknown>>>(new Map());
-  const cleanupFunctions = useRef<Array<() => void>>([]);
   const fetchStateRef = useRef(fetchState);
   const chatMessagesRef = useRef<ChatMessageFromServer[]>(chatMessages);
   const starMutationInFlightRef = useRef<Set<string>>(new Set());
@@ -861,7 +861,7 @@ export const Conversation: React.FC = () => {
   }, []);
 
   const calculateMinHeight = useCallback(() => {
-    const viewportHeight = window.innerHeight;
+    const viewportHeight = getChatViewportHeight();
     const headerHeight = headerRef.current?.offsetHeight || 80;
     const footerHeight = (footerRef.current?.offsetHeight || 0) - 45;
     const userMessageHeight = latestUserMessageRef.current?.offsetHeight || 0;
@@ -1441,11 +1441,11 @@ export const Conversation: React.FC = () => {
   const handleScroll = useMemo(() => throttle(handleScrollInternal, SCROLL_THROTTLE_MS), [handleScrollInternal]);
 
   const handleResize = useCallback(() => {
-    setDynamicMaxHeight(window.innerHeight / DYNAMIC_MAX_HEIGHT_RATIO);
+    setDynamicMaxHeight(getChatViewportHeight() / DYNAMIC_MAX_HEIGHT_RATIO);
     calculateMinHeight();
   }, [calculateMinHeight]);
 
-  const debouncedHandleResize = useMemo(() => debounce(handleResize, RESIZE_DEBOUNCE_MS), [handleResize]);
+  useChatViewport(chatShellRef, mainScrollRef, handleResize);
 
   const clearAllInput = useCallback(() => {
     setMessage('');
@@ -1494,6 +1494,10 @@ export const Conversation: React.FC = () => {
     () => debounce(handleTextareaResize, INPUT_DEBOUNCE_MS),
     [handleTextareaResize],
   );
+
+  useEffect(() => {
+    if (inputRef.current) handleTextareaResize(inputRef.current);
+  }, [dynamicMaxHeight, handleTextareaResize]);
 
   const handlePaste = useCallback(
     (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
@@ -1567,7 +1571,7 @@ export const Conversation: React.FC = () => {
     if (!initialLoadDone.current) {
       loadChatHistory(1, true);
       getSystemInfo();
-      inputRef.current?.focus({ preventScroll: true });
+      if (!isTouchChatViewport()) inputRef.current?.focus({ preventScroll: true });
       initialLoadDone.current = true;
     }
   }, [loadChatHistory]);
@@ -1738,14 +1742,6 @@ export const Conversation: React.FC = () => {
   }, [chatMessages, scrollToBottom]);
 
   useEffect(() => {
-    handleResize();
-    window.addEventListener('resize', debouncedHandleResize);
-    const cleanup = () => window.removeEventListener('resize', debouncedHandleResize);
-    cleanupFunctions.current.push(cleanup);
-    return cleanup;
-  }, [handleResize, debouncedHandleResize]);
-
-  useEffect(() => {
     return () => {
       currentAttachments.forEach((att) => att.previewUrl && URL.revokeObjectURL(att.previewUrl));
     };
@@ -1753,20 +1749,16 @@ export const Conversation: React.FC = () => {
 
   useEffect(() => {
     return () => {
-      fetchState.abortController?.abort();
+      fetchStateRef.current.abortController?.abort();
 
       if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
       if (scrollTimeoutRef2.current) clearTimeout(scrollTimeoutRef2.current);
       if (hideDateStickyTimeoutRef.current) clearTimeout(hideDateStickyTimeoutRef.current);
       if (highlightTimeoutRef.current) clearTimeout(highlightTimeoutRef.current);
 
-      cleanupFunctions.current.forEach((cleanup) => cleanup());
-      cleanupFunctions.current = [];
       requestCache.current.clear();
-
-      currentAttachments.forEach((att) => att.previewUrl && URL.revokeObjectURL(att.previewUrl));
     };
-  }, [fetchState.abortController, currentAttachments]);
+  }, []);
 
   const handleScrollToBottomClick = useCallback(() => {
     scrollToBottom(true, true);
@@ -1854,7 +1846,7 @@ export const Conversation: React.FC = () => {
   }, []);
 
   return (
-    <div className="relative bg-background overflow-x-hidden">
+    <div ref={chatShellRef} className="meera-chat-shell relative bg-background overflow-x-hidden">
       <Sidebar
         isVisible={isSidebarVisible}
         isMobileOpen={isMobileSidebarOpen}
@@ -1876,7 +1868,7 @@ export const Conversation: React.FC = () => {
       />
 
       <div
-        className={`grid grid-rows-[auto_1fr_auto] h-[100dvh] min-h-0 overflow-hidden bg-background relative transition-[margin] duration-200 ${desktopSidebarMarginClass}`}
+        className={`grid grid-rows-[auto_minmax(0,1fr)_auto] h-[var(--chat-viewport-height,100dvh)] min-h-0 overflow-hidden bg-background relative transition-[margin] duration-200 ${desktopSidebarMarginClass}`}
       >
         {isDraggingOver && (
           <div className="fixed inset-0 bg-primary/10 backdrop-blur-[2px] z-50 flex items-center justify-center">
@@ -1950,13 +1942,13 @@ export const Conversation: React.FC = () => {
             ) : (
               <>
             {isInitialLoading && (
-              <div className="flex justify-center items-center h-[calc(100vh-15rem)]">
+              <div className="flex justify-center items-center h-[max(0px,calc(var(--chat-viewport-height,100dvh)-15rem))]">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
               </div>
             )}
 
             {fetchState.error && !isInitialLoading && chatMessages.length === 0 && (
-              <div className="flex flex-col justify-center items-center h-[calc(100vh-10rem)] text-center">
+              <div className="flex flex-col justify-center items-center h-[max(0px,calc(var(--chat-viewport-height,100dvh)-10rem))] text-center">
                 <p className="text-red-500 mb-2">{fetchState.error}</p>
                 <button
                   onClick={stableCallbacks.handleRetryLoadHistory}
@@ -1968,7 +1960,7 @@ export const Conversation: React.FC = () => {
             )}
 
             {!isInitialLoading && !fetchState.error && chatMessages.length === 0 && (
-              <div className="h-[calc(100vh-10rem)]" />
+              <div className="h-[max(0px,calc(var(--chat-viewport-height,100dvh)-10rem))]" />
             )}
 
             {!isInitialLoading && chatMessages.length > 0 && (
@@ -2114,7 +2106,7 @@ export const Conversation: React.FC = () => {
         {!isImagesView && !isConnectorsView ? (
         <footer
           ref={footerRef}
-          className="w-full z-40 p-2 md:pr-[13px] bg-transparent"
+          className="meera-chat-composer w-full z-40 p-2 md:pr-[13px] bg-transparent"
           style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.5rem)' }}
         >
           <div className="relative">
@@ -2167,7 +2159,7 @@ export const Conversation: React.FC = () => {
             </div>
 
             <form onSubmit={handleFormSubmit} className="w-full max-w-3xl mx-auto bg-transparent mt-[-25px]">
-              <div className="flex flex-col rounded-3xl bg-card backdrop-blur-md border border-primary/20 shadow-lg transition-all duration-200 transform-gpu will-change-transform">
+              <div className="flex flex-col rounded-3xl bg-card backdrop-blur-md border border-primary/20 shadow-lg transition-shadow duration-200">
                 {currentAttachments.length > 0 && (
                   <div className="flex flex-wrap gap-2 px-4 pt-2.5 pb-1">
                     {currentAttachments.map((att, index) => (
@@ -2189,7 +2181,7 @@ export const Conversation: React.FC = () => {
                     debouncedTextareaResize(e.target);
                   }}
                   placeholder="Ask Meera"
-                  className="w-full px-4 py-3 bg-transparent border-none resize-none outline-none text-primary placeholder-primary/50 text-base scrollbar-thin transform-gpu will-change-transform"
+                  className="w-full px-4 py-3 bg-transparent border-none resize-none outline-none text-primary placeholder-primary/50 text-base scrollbar-thin"
                   style={{
                     minHeight: '52px',
                     transition: 'height 0.1s ease-out',
