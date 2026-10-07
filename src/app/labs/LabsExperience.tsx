@@ -337,7 +337,7 @@ export default function LabsExperience({ initialNetwork }: { initialNetwork: Net
       <header className={styles.header}>
         <a href="#" className={styles.brand} aria-label="Meera Labs home">
           <Image className={styles.brandMark} src="/labs/meera-logo.svg" width={36} height={36} alt="" />
-          meera<span className={styles.labs}>LABS</span>
+          <span className={styles.brandWordmark}>meera</span><span className={styles.labs}>LABS</span>
         </a>
         <nav aria-label="Main navigation">
           <a href="#intelligence">Intelligence</a>
@@ -595,7 +595,7 @@ export default function LabsExperience({ initialNetwork }: { initialNetwork: Net
         <div className={styles.footerTop}>
           <a href="#" className={styles.brand}>
             <Image className={styles.brandMark} src="/labs/meera-logo.svg" width={36} height={36} alt="" />
-            meera<span className={styles.labs}>LABS</span>
+            <span className={styles.brandWordmark}>meera</span><span className={styles.labs}>LABS</span>
           </a>
           <p>
             A conscious future.
