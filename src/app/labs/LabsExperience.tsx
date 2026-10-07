@@ -374,7 +374,7 @@ export default function LabsExperience({ initialNetwork }: { initialNetwork: Net
               <div className={styles.networkStats}>
                 <div>
                   <strong>{network ? network.registeredMinds.toLocaleString('en-US') : '-'}</strong>
-                  <span>REGISTERED MINDS</span>
+                  <span>ACTIVE MIND</span>
                 </div>
               </div>
             </div>
@@ -382,7 +382,7 @@ export default function LabsExperience({ initialNetwork }: { initialNetwork: Net
               <Hive minds={network?.registeredMinds ?? null} />
               <span className={styles.artLabel}>THE HIVE MIND</span>
               <details className={styles.networkNote}>
-                <summary>About this network ↗</summary>
+                <summary>About this network <Arrow /></summary>
                 <p>
                   {network
                     ? `Verified ${new Date(network.updatedAt).toISOString().slice(0, 10)} (UTC). `
