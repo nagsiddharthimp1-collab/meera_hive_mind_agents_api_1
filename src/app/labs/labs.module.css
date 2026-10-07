@@ -66,9 +66,10 @@
   min-height: 44px;
 }
 .brandMark {
-  font-size: 36px;
-  line-height: 1;
-  color: #705940;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  display: block;
 }
 .labs {
   font-size: 10px;
@@ -949,7 +950,8 @@
     font-size: 28px;
   }
   .brandMark {
-    font-size: 29px;
+    width: 29px;
+    height: 29px;
   }
   .header nav {
     display: flex;
