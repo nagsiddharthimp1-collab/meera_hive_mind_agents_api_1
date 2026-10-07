@@ -3,6 +3,7 @@
 import {
   calculateEstimatedValueUsdc,
   formatEstimatedValueUsdc,
+  formatInteger,
   formatMeeraPlain,
 } from '@/lib/meeraRewards';
 import { supabase } from '@/lib/supabaseClient';
@@ -10,6 +11,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { FiRefreshCw, FiX } from 'react-icons/fi';
 
 type RewardsSummary = {
+  aiTokensConsumedLifetimeFormatted: string;
+  aiTokensPerMeera: number;
   meeraEarnedLifetime: number;
   currentMeeraPriceUsdc: number | null;
   estimatedValueUsdc: number | null;
@@ -118,6 +121,17 @@ export function MeeraRewardsDialog({ isOpen, onClose }: MeeraRewardsDialogProps)
               </>
             )}
           </div>
+          {summary ? (
+            <div className="mt-3 rounded-xl border border-primary/10 px-4 py-3">
+              <dl className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                <dt className="text-primary/60">Intelligence Tokens Consumed</dt>
+                <dd className="break-words font-semibold">{summary.aiTokensConsumedLifetimeFormatted}</dd>
+              </dl>
+              <p className="mt-2 text-xs leading-5 text-primary/60">
+                {formatInteger(summary.aiTokensPerMeera)} Intelligence Tokens = 1 Meera Coin
+              </p>
+            </div>
+          ) : null}
           <p className="mt-4 text-sm leading-6 text-primary/60">You earn Meera Coins by using Meera. This wallet shows the total coins you have earned.</p>
         </div>
       </section>
