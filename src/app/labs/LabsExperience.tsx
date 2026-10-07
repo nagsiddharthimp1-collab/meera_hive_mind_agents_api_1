@@ -571,28 +571,29 @@ export default function LabsExperience({ initialNetwork }: { initialNetwork: Net
             <span>05 / ROOTS AND HORIZONS</span>
             <span>INDIA → WORLD</span>
           </div>
-          <div className={styles.indiaStatement} data-reveal>
-            <p className={styles.eyebrow}>A CIVILISATION OF POSSIBILITY.</p>
-            <h2 id="india-title">
-              From India.
-              <br />
-              <em>For the world.</em>
-            </h2>
-            <p className={styles.indiaLead}>
-              At the frontier of intelligence, we carry the courage to imagine — and the responsibility to build for
-              everyone.
-            </p>
+          <div className={styles.companionGrid} data-reveal>
+            <div className={styles.indiaStatement}>
+              <h2 id="india-title">
+                From India.
+                <br />
+                <em>For the world.</em>
+              </h2>
+              <p className={styles.indiaLead}>
+                At the frontier of intelligence, we carry the courage to imagine — and the responsibility to build for
+                everyone.
+              </p>
+            </div>
+            <figure className={styles.indiaArtwork}>
+              <Image
+                src="/labs/rama-ashwamedha-drawing.webp"
+                width={1499}
+                height={1049}
+                sizes="(max-width: 700px) 300px, (max-width: 1600px) 45vw, 720px"
+                alt="Hand-drawn interpretation of Rama’s Ashwamedha yajna from the Ramayana, with Rama, sages, Sita’s effigy, and the ceremonial horse."
+              />
+              <figcaption>RAMA’S ASHWAMEDHA · RAMAYANA</figcaption>
+            </figure>
           </div>
-          <figure className={styles.indiaArtwork}>
-            <Image
-              src="/labs/india-for-the-world.webp"
-              width={1536}
-              height={1024}
-              sizes="(max-width: 700px) 100vw, 1100px"
-              alt="Symbolic artwork of an ivory horse with a saffron drape, with people walking toward a sunlit Indian horizon."
-            />
-            <figcaption>Rooted in India. Open to every mind.</figcaption>
-          </figure>
         </section>
       </main>
       <footer className={styles.footer}>

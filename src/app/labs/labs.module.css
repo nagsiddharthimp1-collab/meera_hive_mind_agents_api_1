@@ -323,7 +323,8 @@
 .intelligence,
 .participation,
 .mission,
-.companion {
+.companion,
+.indiaClosing {
   padding: 40px var(--gutter) clamp(64px, 7vw, 108px);
   scroll-margin-top: 20px;
 }
@@ -562,7 +563,8 @@
   background-size: 200% 100%;
   animation: signal 7s linear infinite;
 }
-.companion {
+.companion,
+.indiaClosing {
   padding-bottom: 100px;
 }
 .companionGrid {
@@ -572,7 +574,8 @@
   gap: var(--column-gap);
   padding-top: 30px;
 }
-.companion h2 {
+.companion h2,
+.indiaStatement h2 {
   font-size: clamp(38px, 4.3vw, 64px);
 }
 .companion p:not(.eyebrow) {
@@ -633,54 +636,37 @@
   border-top: 1px solid var(--line);
 }
 .indiaClosing {
-  background: #252a23;
-  color: #eeefe5;
-  padding: 34px var(--gutter) 72px;
-}
-.indiaClosing .sectionLabel {
-  color: #abb09e;
-  border-color: #454a3f;
-}
-.indiaStatement {
-  padding-top: clamp(64px, 8vw, 120px);
-  text-align: center;
-}
-.indiaStatement .eyebrow {
-  color: #c4a47e;
-}
-.indiaStatement h2 {
-  margin: 25px 0;
-  font-size: clamp(48px, 7.5vw, 110px);
-  line-height: 1.04;
-  letter-spacing: -0.055em;
-  font-weight: 400;
-}
-.indiaClosing em {
-  color: #c4a47e;
+  border-top: 1px solid var(--line);
 }
 .indiaLead {
   max-width: 440px;
-  margin: 0 auto;
-  color: #bcc0b3;
-  font-size: clamp(14px, 1.2vw, 17px);
-  line-height: 1.8;
+  margin: 30px 0;
+  color: var(--muted);
+  font-size: 17px;
+  line-height: 1.6;
 }
 .indiaArtwork {
-  max-width: 1100px;
-  margin: 45px auto 0;
+  aspect-ratio: 1;
+  min-width: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
 }
 .indiaArtwork img {
   display: block;
   width: 100%;
   height: auto;
-  mask-image: linear-gradient(to bottom, transparent, #000 12%, #000 85%, transparent);
+  filter: grayscale(1);
+  mix-blend-mode: multiply;
 }
 .indiaArtwork figcaption {
   text-align: center;
-  margin-top: 18px;
-  color: #bec1b4;
-  font-size: 12px;
-  letter-spacing: 0.03em;
+  margin-top: 20px;
+  color: var(--muted);
+  font: 8px monospace;
+  letter-spacing: 1.4px;
 }
 .companyIdentity {
   display: grid;
@@ -707,14 +693,14 @@
   margin: 10px 0 0;
 }
 @media (max-width: 700px) {
-  .indiaClosing {
-    padding: 25px var(--gutter) 45px;
-  }
-  .indiaStatement h2 {
-    font-size: clamp(45px, 12vw, 80px);
-  }
   .indiaArtwork {
-    margin: 30px calc(-1 * var(--gutter)) 0;
+    max-width: 300px;
+    width: 100%;
+    margin: 0 auto;
+    aspect-ratio: 1.1;
+  }
+  .indiaLead {
+    font-size: 15px;
   }
   .companyIdentity {
     grid-template-columns: 1fr;
@@ -893,7 +879,8 @@
     font-size: 8px;
     letter-spacing: 1px;
   }
-  .companion h2 {
+  .companion h2,
+  .indiaStatement h2 {
     font-size: clamp(32px, 4.4vw, 40px);
   }
 }
@@ -996,7 +983,8 @@
   .intelligence,
   .participation,
   .mission,
-  .companion {
+  .companion,
+  .indiaClosing {
     padding: 30px var(--gutter) 64px;
   }
   .sectionLabel {
@@ -1098,7 +1086,8 @@
     grid-template-columns: 1fr;
     gap: 20px;
   }
-  .companion h2 {
+  .companion h2,
+  .indiaStatement h2 {
     font-size: clamp(32px, 9.7vw, 46px);
   }
   .companionArt {
