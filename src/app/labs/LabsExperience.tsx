@@ -278,6 +278,31 @@ export default function LabsExperience({ initialNetwork }: { initialNetwork: Net
   }, [initialNetwork]);
   const root = useRef<HTMLDivElement>(null);
   useEffect(() => {
+    const heading = root.current?.querySelector<HTMLHeadingElement>('h1');
+    if (!heading) return;
+    const context = document.createElement('canvas').getContext('2d');
+    if (!context) return;
+    let disposed = false;
+    const alignInk = () => {
+      if (disposed) return;
+      heading.querySelectorAll<HTMLElement>('[data-headline-line]').forEach((line) => {
+        const style = getComputedStyle(line);
+        context.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+        // Align the visible letter edge, not the font's invisible side bearing.
+        const offset = context.measureText(line.textContent?.trim().charAt(0) ?? '').actualBoundingBoxLeft;
+        if (Number.isFinite(offset)) line.style.setProperty('--ink-offset', `${offset}px`);
+      });
+    };
+    alignInk();
+    void document.fonts.ready.then(alignInk);
+    const resize = new ResizeObserver(alignInk);
+    resize.observe(heading);
+    return () => {
+      disposed = true;
+      resize.disconnect();
+    };
+  }, []);
+  useEffect(() => {
     const elements = root.current?.querySelectorAll('[data-reveal]');
     if (!elements) return;
     root.current?.classList.add(styles.motionReady);
@@ -338,20 +363,17 @@ export default function LabsExperience({ initialNetwork }: { initialNetwork: Net
       </header>
       <main id="main">
         <section className={styles.hero} aria-labelledby="hero-title">
-          <div className={styles.heroTop}>
-            <span>
-              <i /> AN INDEPENDENT FRONTIER OF INTELLIGENCE
-            </span>
-            <span>RESEARCH · DEVELOPMENT · POSSIBILITY</span>
-          </div>
           <div className={styles.heroContent}>
             <div className={styles.heroCopy}>
-              <p className={styles.eyebrow}>HUMAN AT HEART. COLLECTIVE BY DESIGN.</p>
               <h1 id="hero-title">
-                <span className={styles.heroLine}>Conscious</span>
-                <span className={styles.heroLine}>Intelligence.</span>
-                <span className={styles.heroLine}>
-                  <em>For everyone.</em>
+                <span data-headline-line className={styles.heroLine}>
+                  Conscious
+                </span>
+                <span data-headline-line className={styles.heroLine}>
+                  Intelligence.
+                </span>
+                <span data-headline-line className={styles.heroLine}>
+                  For everyone.
                 </span>
               </h1>
               <p className={styles.heroDescription}>
@@ -367,18 +389,11 @@ export default function LabsExperience({ initialNetwork }: { initialNetwork: Net
                   <strong>{network ? network.registeredMinds.toLocaleString('en-US') : '—'}</strong>
                   <span>REGISTERED MINDS</span>
                 </div>
-                <p>
-                  Individual lives.
-                  <br />A collective beginning.
-                </p>
               </div>
             </div>
             <div className={styles.hiveArt}>
-              <div className={styles.orbitOne} />
-              <div className={styles.orbitTwo} />
               <Hive minds={network?.registeredMinds ?? null} />
-              <span className={styles.artLabel}>HIVE MIND / HUMAN NODES</span>
-              <span className={styles.artCorner}>U → C → M → I</span>
+              <span className={styles.artLabel}>THE HIVE MIND</span>
               <details className={styles.networkNote}>
                 <summary>About this network ↗</summary>
                 <p>
@@ -399,7 +414,6 @@ export default function LabsExperience({ initialNetwork }: { initialNetwork: Net
             <a href="#intelligence">
               SCROLL TO DISCOVER <span aria-hidden="true">↓</span>
             </a>
-            <span>CONSCIOUS INTELLIGENCE. SHARED POSSIBILITY.</span>
             <SoundControl />
           </div>
         </section>
@@ -416,13 +430,9 @@ export default function LabsExperience({ initialNetwork }: { initialNetwork: Net
               <span>Many minds.</span>
             </h2>
             <div>
-              <p className={styles.lead}>
-                MEERA is the world’s first Conscious Intelligence (CI) architected through decentralised Hive Mind.
-              </p>
+              <p className={styles.lead}>The Hive Mind connects people and agents through a Collective Context Web.</p>
               <p className={styles.bodyCopy}>
-                People bring experiences. Agents bring reasoning. Together, they create a Collective Context Web: a
-                network designed to remember, learn, and evolve. Each interaction adds context. Context deepens memory.
-                Memory strengthens intelligence.
+                Every interaction adds context. Context deepens memory. Memory strengthens intelligence.
               </p>
               <a href="/whitepaper-v1.pdf" className={styles.textLink}>
                 Read the whitepaper <Arrow />
@@ -451,17 +461,6 @@ export default function LabsExperience({ initialNetwork }: { initialNetwork: Net
               </div>
             </div>
           </div>
-          <div className={styles.researchNote}>
-            <span>THE RESEARCH THESIS</span>
-            <p>
-              More minds. More context.
-              <br />
-              <em>A deeper understanding.</em>
-            </p>
-            <a href="/whitepaper-v1.pdf">
-              Read the whitepaper <Arrow />
-            </a>
-          </div>
         </section>
 
         <section id="participation" className={styles.participation}>
@@ -478,7 +477,6 @@ export default function LabsExperience({ initialNetwork }: { initialNetwork: Net
               <small>PROOF OF CONSCIOUSNESS</small>
             </div>
             <div className={styles.proofCopy}>
-              <p className={styles.eyebrow}>INTELLIGENCE IS A SHARED ENDEAVOUR.</p>
               <h2>
                 Presence.
                 <br />
@@ -554,7 +552,6 @@ export default function LabsExperience({ initialNetwork }: { initialNetwork: Net
           </div>
           <div className={styles.companionGrid} data-reveal>
             <div>
-              <p className={styles.eyebrow}>FROM A SHARED VISION. TO YOUR EVERYDAY.</p>
               <h2>
                 A world of intelligence.
                 <br />

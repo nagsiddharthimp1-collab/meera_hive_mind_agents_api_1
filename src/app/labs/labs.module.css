@@ -152,24 +152,21 @@
 .hero h1 {
   font-size: clamp(56px, min(6.4vw, 9.4svh), 100px);
   font-weight: 400;
-  line-height: 0.99;
-  letter-spacing: -0.065em;
+  line-height: 1.04;
+  letter-spacing: -0.055em;
   margin: 0;
 }
 .heroLine {
   display: block;
+  text-indent: var(--ink-offset, 0px);
   animation: heroEnter 1.2s cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 .heroLine:nth-child(2) {
   animation-delay: 0.12s;
-  text-indent: -0.03em;
-}
-.heroLine em {
-  display: inline-block;
-  transform: translateX(0.02em);
 }
 .heroLine:nth-child(3) {
   animation-delay: 0.24s;
+  color: #858b7c;
 }
 .heroCopy > .eyebrow {
   animation: heroEnter 1s both;
@@ -179,10 +176,11 @@
   animation: heroEnter 1s 0.35s both;
 }
 .page em {
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: inherit;
+  font-style: normal;
   font-weight: 400;
-  color: var(--accent);
-  letter-spacing: -0.045em;
+  color: #858b7c;
+  letter-spacing: inherit;
 }
 .heroDescription {
   font-size: 15px;
@@ -366,8 +364,8 @@
   margin-bottom: 30px;
 }
 .architecture {
-  border: 1px solid var(--line);
-  padding: 23px 32px 42px;
+  border-top: 1px solid var(--line);
+  padding: 23px 0 42px;
 }
 .archLabel {
   font-family: monospace;
@@ -930,7 +928,7 @@
     font-size: clamp(20px, 5.8vw, 24px);
   }
   .architecture {
-    padding: 18px 13px 28px;
+    padding: 18px 0 28px;
   }
   .archLabel {
     font-size: 7px;
@@ -1061,18 +1059,18 @@
   display: flex;
   align-items: center;
   gap: 28px;
-  border-top: 1px solid var(--line);
-  margin-top: 28px;
-  padding-top: 20px;
+  margin-top: 32px;
+  padding-top: 0;
   max-width: 390px;
 }
 .networkStats > div {
   display: flex;
-  flex-direction: column;
-  gap: 9px;
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
 }
 .networkStats strong {
-  font-size: 36px;
+  font-size: 28px;
   font-weight: 400;
   line-height: 1;
   letter-spacing: -1.4px;
