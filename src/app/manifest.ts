@@ -8,8 +8,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "India's AI",
     start_url: '/',
     display: 'standalone',
-    background_color: '#0c3c26',
-    theme_color: '#0c3c26',
+    background_color: '#faf3e9',
+    theme_color: '#faf3e9',
     icons: [
       {
         src: '/icons/favicon-196.png',

@@ -221,6 +221,7 @@ export const useMessageSubmission = ({
 }: UseMessageSubmissionProps) => {
   const { showToast } = useToast();
 
+  const submissionInFlight = useRef(false);
   const messageRelationshipMapRef = useRef<Map<string, string>>(new Map());
   const mostRecentAssistantMessageIdRef = useRef<string | null>(null);
 
@@ -298,7 +299,7 @@ export const useMessageSubmission = ({
       optimisticIdToUpdate?: string,
       isFromManualRetry: boolean = false,
     ) => {
-      if (isSending) {
+      if (isSending || submissionInFlight.current) {
         showToast('Please wait for the current response to finish.', {
           type: 'info',
           position: 'conversation',
@@ -318,6 +319,9 @@ export const useMessageSubmission = ({
         return;
       }
 
+      submissionInFlight.current = true;
+      setIsSending(true);
+
       // STEP 1: upload attachments
       let uploaded: UploadedMeta[] = [];
       if (hasAttachments) {
@@ -325,6 +329,8 @@ export const useMessageSubmission = ({
           uploaded = await Promise.all(attachments.map((att) => uploadAttachmentToStorage(att.file, att.type)));
         } catch (uploadErr) {
           console.error('Upload failed', uploadErr);
+          submissionInFlight.current = false;
+          setIsSending(false);
           showToast('Failed to upload file(s). Please try again.', {
             type: 'error',
             position: 'conversation',
@@ -379,8 +385,7 @@ export const useMessageSubmission = ({
         clearAllInput();
         onMessageSent?.();
 
-        // Only scroll on user's own send
-        setTimeout(() => scrollToBottom(true, true), 150);
+
       } else {
         setChatMessages((prev) =>
           prev.map((msg) => (msg.message_id === optimisticId ? { ...msg, failed: false, try_number: tryNumber } : msg)),
@@ -405,8 +410,18 @@ export const useMessageSubmission = ({
 
       const assistantId = messageRelationshipMapRef.current.get(optimisticId);
 
+      let fullAssistantText = '';
+      let deltaFrame = 0;
+      const flushDelta = () => {
+        cancelAnimationFrame(deltaFrame);
+        deltaFrame = 0;
+        if (!assistantId) return;
+        const content = fullAssistantText;
+        setChatMessages(prev => prev.map(msg => msg.message_id === assistantId
+          ? { ...msg, content, failed: false, try_number: tryNumber }
+          : msg));
+      };
       try {
-        let fullAssistantText = '';
 
         await chatService.streamMessage({
           message: trimmedMessage,
@@ -446,22 +461,10 @@ export const useMessageSubmission = ({
           },
           onDelta: (delta) => {
             fullAssistantText += delta;
-            if (!assistantId) return;
-
-            setChatMessages((prev) =>
-              prev.map((msg) =>
-                msg.message_id === assistantId
-                  ? {
-                      ...msg,
-                      content: (msg.content || '') + delta,
-                      failed: false,
-                      try_number: tryNumber,
-                    }
-                  : msg,
-              ),
-            );
+            if (assistantId && !deltaFrame) deltaFrame = requestAnimationFrame(flushDelta);
           },
           onDone: async (finalMsg) => {
+            flushDelta();
             const finalMsgContent = String(finalMsg?.content || '').trim();
             if (assistantId) {
               setChatMessages((prev) =>
@@ -497,6 +500,7 @@ export const useMessageSubmission = ({
 
         return;
       } catch (error) {
+        cancelAnimationFrame(deltaFrame);
         console.error('Error sending message:', error);
         const status = getErrorStatus(error);
 
@@ -536,12 +540,14 @@ export const useMessageSubmission = ({
           }),
         );
       } finally {
+        cancelAnimationFrame(deltaFrame);
+        submissionInFlight.current = false;
         setIsSending(false);
         setIsAssistantTyping(false);
         lastOptimisticMessageIdRef.current = null;
 
         if (isFromManualRetry) {
-          setTimeout(() => scrollToBottom(true, true), 150);
+          scrollToBottom(false, true);
         }
       }
     },

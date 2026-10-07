@@ -1,14 +1,14 @@
 'use client';
 
 import { chatService } from '@/app/api/services/chat';
-import { ImagesView, type GalleryImageItem } from '@/components/ImagesView';
-import { ConnectorsView } from '@/components/ConnectorsView';
-import { MeeraVoice } from '@/components/MeeraVoice';
+import type { GalleryImageItem } from '@/components/ImagesView';
+import dynamic from 'next/dynamic';
 import { Sidebar } from '@/components/Sidebar';
-import { SupportPanel } from '@/components/ui/SupportPanel';
 import { Toast } from '@/components/ui/Toast';
 import { useToast } from '@/components/ui/ToastProvider';
 import { usePricingModal } from '@/contexts/PricingModalContext';
+import { useChatDraft } from '@/hooks/useChatDraft';
+import { useChatScroll } from '@/hooks/useChatScroll';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { getChatViewportHeight, isTouchChatViewport, useChatViewport } from '@/hooks/useChatViewport';
 import { useDragAndDrop } from '@/hooks/useDragAndDrop';
@@ -30,6 +30,11 @@ import { AttachmentInputArea, AttachmentInputAreaRef } from './AttachmentInputAr
 import { AttachmentPreview } from './AttachmentPreview';
 import { CallSessionItem } from './CallSessionItem';
 import { RenderedMessageItem } from './RenderedMessageItem';
+
+const ImagesView = dynamic(() => import('@/components/ImagesView').then(module => module.ImagesView), { loading: () => <p role="status" className="p-6 text-primary/60">Loading images…</p> });
+const ConnectorsView = dynamic(() => import('@/components/ConnectorsView').then(module => module.ConnectorsView), { loading: () => <p role="status" className="p-6 text-primary/60">Loading connectors…</p> });
+const MeeraVoice = dynamic(() => import('@/components/MeeraVoice/VoiceSession'), { ssr: false });
+const SupportPanel = dynamic(() => import('@/components/ui/SupportPanel').then(module => module.SupportPanel), { ssr: false });
 
 const MAX_ATTACHMENTS_CONFIG = 10;
 const DYNAMIC_MAX_HEIGHT_RATIO = 3.5;
@@ -317,7 +322,7 @@ const MemoizedRenderedMessageItem = React.memo(RenderedMessageItem, (prevProps, 
     prevProps.showTypingIndicator === nextProps.showTypingIndicator &&
     prevProps.thoughtText === nextProps.thoughtText &&
     prevProps.hasMinHeight === nextProps.hasMinHeight &&
-    prevProps.dynamicMinHeight === nextProps.dynamicMinHeight &&
+    (!nextProps.hasMinHeight || prevProps.dynamicMinHeight === nextProps.dynamicMinHeight) &&
     attachmentsEqual
   );
 });
@@ -338,15 +343,15 @@ const MemoizedAttachmentPreview = React.memo(AttachmentPreview, (prevProps, next
 });
 
 export const Conversation: React.FC = () => {
-  const [message, setMessage] = useState('');
-  const [inputValue, setInputValue] = useState('');
+  const { user: supabaseUser, userId: supabaseUserId } = useCurrentUser();
+  const [message, setMessage] = useChatDraft(supabaseUserId);
+  const [isOffline, setIsOffline] = useState(false);
 
   const [currentAttachments, setCurrentAttachments] = useState<ChatAttachmentInputState[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessageFromServer[]>([]);
   const [isSearchActive, setIsSearchActive] = useState(true);
   const [currentThoughtText, setCurrentThoughtText] = useState('');
   const [dynamicMinHeight, setDynamicMinHeight] = useState<number>(500);
-  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [starredMessageIds, setStarredMessageIds] = useState<string[]>([]);
   const [starredMessageSnapshots, setStarredMessageSnapshots] = useState<ChatMessageFromServer[]>([]);
   const [isSidebarVisible, setIsSidebarVisible] = useState(false);
@@ -393,7 +398,6 @@ export const Conversation: React.FC = () => {
   const mainScrollRef = useRef<HTMLDivElement>(null);
   const chatShellRef = useRef<HTMLDivElement>(null);
   const initialLoadDone = useRef(false);
-  const justSentMessageRef = useRef(false);
   const spacerRef = useRef<HTMLDivElement>(null);
 
   const headerRef = useRef<HTMLElement>(null);
@@ -418,7 +422,6 @@ export const Conversation: React.FC = () => {
   const scrollTimeoutRef2 = useRef<NodeJS.Timeout | null>(null);
 
   const { data: sessionData } = useSession();
-  const { user: supabaseUser, userId: supabaseUserId } = useCurrentUser();
   const { formattedTotalCostTokens } = useTotalCostTokens(supabaseUserId);
   const {
     data: subscriptionData,
@@ -435,12 +438,6 @@ export const Conversation: React.FC = () => {
   useEffect(() => {
     chatMessagesRef.current = chatMessages;
   }, [chatMessages]);
-
-  const debouncedSetMessage = useMemo(() => debounce((value: string) => setMessage(value), INPUT_DEBOUNCE_MS), []);
-
-  useEffect(() => {
-    debouncedSetMessage(inputValue);
-  }, [inputValue, debouncedSetMessage]);
 
   const lastFailedMessageId = useMemo(() => {
     for (let i = chatMessages.length - 1; i >= 0; i--) {
@@ -950,18 +947,7 @@ export const Conversation: React.FC = () => {
     ],
   );
 
-  const scrollToBottom = useCallback((smooth: boolean = true, force: boolean = false) => {
-    const el = mainScrollRef.current;
-    if (!el) return;
-    if (!force) return;
-
-    requestAnimationFrame(() => {
-      el.scrollTo({
-        top: el.scrollHeight,
-        behavior: smooth ? 'smooth' : 'auto',
-      });
-    });
-  }, []);
+  const { showLatest: showScrollToBottom, scrollToBottom } = useChatScroll(mainScrollRef, supabaseUserId, activeSidebarView === 'chat');
 
   useEffect(() => {
     if (!ENABLE_LEGACY_HISTORY_IMPORT) return;
@@ -1399,20 +1385,6 @@ export const Conversation: React.FC = () => {
       isScrollingUp.current = currentScrollTop < lastScrollTop.current;
       lastScrollTop.current = currentScrollTop;
 
-      const direction =
-        currentScrollTop > lastScrollTopRef.current
-          ? 'down'
-          : currentScrollTop < lastScrollTopRef.current
-            ? 'up'
-            : 'still';
-      lastScrollTopRef.current = currentScrollTop;
-
-      if (scrollTimeoutRef2.current) clearTimeout(scrollTimeoutRef2.current);
-
-      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-      const isNotAtBottom = distanceFromBottom > 100;
-      setShowScrollToBottom(direction === 'up' && isNotAtBottom);
-
       if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
       setIsUserNearTop(scrollTop < SCROLL_THRESHOLD);
       const isAutoLoadSuppressed =
@@ -1449,14 +1421,13 @@ export const Conversation: React.FC = () => {
 
   const clearAllInput = useCallback(() => {
     setMessage('');
-    setInputValue('');
     setCurrentAttachments([]);
     attachmentInputAreaRef.current?.clear();
     if (inputRef.current) {
       inputRef.current.style.height = 'auto';
       inputRef.current.scrollTop = 0;
     }
-  }, []);
+  }, [setMessage]);
 
   const handleTextareaResize = useCallback(
     (textarea: HTMLTextAreaElement, shouldPreserveCursor: boolean = true) => {
@@ -1500,7 +1471,7 @@ export const Conversation: React.FC = () => {
 
   useEffect(() => {
     if (inputRef.current) handleTextareaResize(inputRef.current);
-  }, [dynamicMaxHeight, handleTextareaResize]);
+  }, [dynamicMaxHeight, handleTextareaResize, message]);
 
   const handlePaste = useCallback(
     (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
@@ -1533,7 +1504,8 @@ export const Conversation: React.FC = () => {
     clearAllInput,
     scrollToBottom,
     onMessageSent: () => {
-      setTimeout(() => calculateMinHeight(), 200);
+      calculateMinHeight();
+      scrollToBottom(false, true);
     },
   });
 
@@ -1578,6 +1550,34 @@ export const Conversation: React.FC = () => {
       initialLoadDone.current = true;
     }
   }, [loadChatHistory]);
+
+  useEffect(() => {
+    let active = true;
+    let refreshing = false;
+    const refresh = async () => {
+      setIsOffline(!navigator.onLine);
+      if (!navigator.onLine || document.visibilityState !== 'visible' || isSending || refreshing || !supabaseUserId) return;
+      refreshing = true;
+      try {
+        const response = await chatService.getChatHistory(1);
+        if (active && response.message === 'ok') mergeMessagesIntoState(response.data as ChatMessageFromServer[]);
+      } catch { /* Keep existing history and draft on a failed refresh. */ }
+      finally { refreshing = false; }
+    };
+    const offline = () => setIsOffline(true);
+    setIsOffline(!navigator.onLine);
+    window.addEventListener('online', refresh);
+    window.addEventListener('offline', offline);
+    window.addEventListener('pageshow', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      active = false;
+      window.removeEventListener('online', refresh);
+      window.removeEventListener('offline', offline);
+      window.removeEventListener('pageshow', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, [isSending, mergeMessagesIntoState, supabaseUserId]);
 
   // A refresh can land between the assistant placeholder insert and task creation.
   // Reconcile that short gap so a running agent reconnects to its in-bubble
@@ -1738,13 +1738,6 @@ export const Conversation: React.FC = () => {
   }, [mergeGalleryItems, mergeMessagesIntoState, supabaseUserId]);
 
   useEffect(() => {
-    if (justSentMessageRef.current) {
-      scrollToBottom(true, true);
-      justSentMessageRef.current = false;
-    }
-  }, [chatMessages, scrollToBottom]);
-
-  useEffect(() => {
     return () => {
       currentAttachments.forEach((att) => att.previewUrl && URL.revokeObjectURL(att.previewUrl));
     };
@@ -1770,15 +1763,17 @@ export const Conversation: React.FC = () => {
   const handleFormSubmit = useCallback(
     (e: React.FormEvent) => {
       e.preventDefault();
-      if (!canSubmit) return;
-      justSentMessageRef.current = true;
-      executeSubmission(message, currentAttachments);
+      const text = inputRef.current?.value ?? message;
+      if (isSending || hasPendingUploads || isOffline || (!text.trim() && currentAttachments.length === 0)) return;
+      void executeSubmission(text, currentAttachments);
     },
     [
       executeSubmission,
       message,
       currentAttachments,
-      canSubmit,
+      isSending,
+      hasPendingUploads,
+      isOffline,
     ],
   );
 
@@ -1917,6 +1912,7 @@ export const Conversation: React.FC = () => {
 
             <div className="w-9 h-9" />
           </div>
+          {isOffline && <div role="status" className="px-4 pb-2 text-center text-sm text-primary/70">You’re offline. Your draft is saved on this device.</div>}
         </header>
 
         <main
@@ -2060,7 +2056,7 @@ export const Conversation: React.FC = () => {
                                     ? latestAssistantMessageRef
                                     : null
                               }
-                              className="message-item-wrapper w-full min-w-0 transform-gpu will-change-transform"
+                              className="message-item-wrapper w-full min-w-0"
                               style={
                                 highlightedMessageId === msg.message_id
                                   ? {
@@ -2113,7 +2109,7 @@ export const Conversation: React.FC = () => {
           style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.5rem)' }}
         >
           <div className="relative">
-            <div className="absolute bottom_full left-0 right-0 flex flex-col items-center mb-2">
+            <div className="absolute bottom-full left-0 right-0 flex flex-col items-center mb-2">
               {!isSubscriptionLoading &&
                 !isSubscriptionError &&
                 isPaidPlanExpired(subscriptionData) && (
@@ -2149,14 +2145,16 @@ export const Conversation: React.FC = () => {
               {showScrollToBottom && (
                 <button
                   onClick={handleScrollToBottomClick}
-                  className="p-2 rounded-full bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 transition-all duration-200 hover:scale-105 shadow-md backdrop-blur-sm hidden"
-                  title="Scroll to bottom"
+                  className="p-2 rounded-full bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 transition-all duration-200 hover:scale-105 shadow-md backdrop-blur-sm min-w-11 min-h-11"
+                  title="Back to latest"
+                  aria-label="Back to latest"
+                  type="button"
                 >
                   <MdKeyboardArrowDown size={20} />
                 </button>
               )}
 
-              <div className="w-full pt-1 flex justify_center">
+              <div className="w-full pt-1 flex justify-center">
                 <Toast position="conversation" />
               </div>
             </div>
@@ -2178,9 +2176,9 @@ export const Conversation: React.FC = () => {
 
                 <textarea
                   ref={inputRef}
-                  value={inputValue}
+                  value={message}
                   onChange={(e) => {
-                    setInputValue(e.target.value);
+                    setMessage(e.target.value);
                     debouncedTextareaResize(e.target);
                   }}
                   placeholder="Ask Meera"
@@ -2193,7 +2191,7 @@ export const Conversation: React.FC = () => {
                   }}
                   rows={1}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
+                    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && e.nativeEvent.keyCode !== 229) {
                       e.preventDefault();
                       if (!canSubmit) return;
                       const form = e.currentTarget.form;
@@ -2212,7 +2210,7 @@ export const Conversation: React.FC = () => {
                     <button
                       type="button"
                       onClick={stableCallbacks.toggleSearchActive}
-                      className={`py-2 px-3 rounded-2xl flex items-center justify-center gap-2 border border-primary/20 focus:outline-none transition-all duration-150 ease-in-out text-sm font-medium cursor-pointer transform-gpu will-change-transform ${
+                      className={`py-2 px-3 rounded-2xl flex items-center justify-center gap-2 border border-primary/20 focus:outline-none transition-all duration-150 ease-in-out text-sm font-medium cursor-pointer ${
                         isSearchActive ? 'bg-primary/10 text-primary' : 'text-gray-500 hover:bg-gray-50'
                       }`}
                       title="Search"
@@ -2237,12 +2235,14 @@ export const Conversation: React.FC = () => {
 
                     <button
                       type="submit"
-                      className={`rounded-full flex items-center justify-center focus:outline-none transition-all duration-150 ease-in-out cursor-pointer min-w-[38px] min-h-[38px] transform-gpu will-change-transform ${
+                      className={`rounded-full flex items-center justify-center focus:outline-none transition-all duration-150 ease-in-out cursor-pointer min-w-[44px] min-h-[44px] transform-gpu will-change-transform ${
                         canSubmit
                           ? 'bg-primary text-background hover:bg-primary/90 hover:scale-105'
                           : 'bg-primary/20 text-primary/50 cursor-not-allowed'
                       }`}
-                      disabled={!canSubmit}
+                      disabled={!canSubmit || isOffline}
+                      aria-label="Send message"
+                      onPointerDown={(e) => { if (document.activeElement === inputRef.current) e.preventDefault(); }}
                       title={hasPendingUploads ? 'Uploading attachment…' : 'Send message'}
                     >
                       <FiArrowUp size={20} />
@@ -2255,14 +2255,14 @@ export const Conversation: React.FC = () => {
         </footer>
         ) : null}
 
-        <SupportPanel isOpen={showSupportPanel} onClose={handleCloseSupportPanel} />
-        <MeeraVoice
+        {showSupportPanel && <SupportPanel isOpen={showSupportPanel} onClose={handleCloseSupportPanel} />}
+        {showMeeraVoice && <MeeraVoice
           isOpen={showMeeraVoice}
           onClose={(wasConnected) => {
             setShowMeeraVoice(false);
             if (wasConnected) loadChatHistory(1, true);
           }}
-        />
+        />}
       </div>
     </div>
   );
