@@ -1477,17 +1477,20 @@ export const Conversation: React.FC = () => {
 
         textarea.style.height = 'auto';
         const scrollHeight = textarea.scrollHeight;
-        const newHeight = Math.min(scrollHeight, dynamicMaxHeight);
+        // A debounced input resize can run after the keyboard viewport changed.
+        // Read the current limit here instead of the value captured when typing.
+        const currentMaxHeight = getChatViewportHeight() / DYNAMIC_MAX_HEIGHT_RATIO;
+        const newHeight = Math.min(scrollHeight, currentMaxHeight);
         textarea.style.height = `${newHeight}px`;
 
-        if (scrollHeight > dynamicMaxHeight) {
+        if (scrollHeight > currentMaxHeight) {
           textarea.scrollTop = shouldAutoScroll ? textarea.scrollHeight : currentScrollTop;
         }
 
         if (shouldPreserveCursor) textarea.setSelectionRange(cursorPosition, selectionEnd);
       });
     },
-    [currentAttachments.length, dynamicMaxHeight],
+    [currentAttachments.length],
   );
 
   const debouncedTextareaResize = useMemo(
@@ -2184,6 +2187,7 @@ export const Conversation: React.FC = () => {
                   className="w-full px-4 py-3 bg-transparent border-none resize-none outline-none text-primary placeholder-primary/50 text-base scrollbar-thin"
                   style={{
                     minHeight: '52px',
+                    maxHeight: 'calc(var(--chat-viewport-height, 100dvh) / 3.5)',
                     transition: 'height 0.1s ease-out',
                     contain: 'layout',
                   }}
