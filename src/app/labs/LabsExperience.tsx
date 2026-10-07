@@ -39,6 +39,8 @@ function Hive({ minds }: { minds: number | null }) {
       }
     });
     const projected = points.map(() => ({ x: 0, y: 0, z: 0 }));
+    const activity = new Float32Array(count);
+    const accents = ['172,111,65', '112,133,107', '111,133,151'];
     const draw = (time: number) => {
       frame = 0;
       if (!visible || document.hidden || !width) {
@@ -66,6 +68,18 @@ function Hive({ minds }: { minds: number | null }) {
           projected[i].y = height / 2 + (p.y * cosTilt - z * sinTilt) * r;
           projected[i].z = p.y * sinTilt + z * cosTilt;
         });
+        // Keep the visible silhouette centered as the finite node mesh rotates.
+        if (projected.length) {
+          let minX = Infinity, maxX = -Infinity;
+          projected.forEach((p) => {
+            const nodeRadius = 0.55 + (p.z + 1) * 0.65;
+            minX = Math.min(minX, p.x - nodeRadius);
+            maxX = Math.max(maxX, p.x + nodeRadius);
+          });
+          const correction = width / 2 - (minX + maxX) / 2;
+          projected.forEach((p) => { p.x += correction; });
+        }
+        activity.fill(0);
         ctx.lineWidth = 0.55;
         edges.forEach(([i, j], index) => {
           const p = projected[i],
@@ -78,16 +92,37 @@ function Hive({ minds }: { minds: number | null }) {
           ctx.lineTo(q.x, q.y);
           ctx.stroke();
           // Quiet signals travel across the front of the network.
-          if (!reduced.matches && index % 83 === 0 && depth > 0.1) {
-            const progress = (elapsed * 0.00018 + index * 0.137) % 1;
-            const alpha = Math.sin(progress * Math.PI) * 0.8;
-            ctx.fillStyle = `rgba(172,111,65,${alpha})`;
+          if (!reduced.matches && index % 127 === 0 && depth > 0.1) {
+            const progress = (elapsed * 0.00016 + index * 0.137) % 1;
+            const alpha = Math.sin(progress * Math.PI) * 0.65;
+            const accent = accents[Math.floor(index / 127) % accents.length];
+            const signalX = p.x + (q.x - p.x) * progress;
+            const signalY = p.y + (q.y - p.y) * progress;
+            ctx.strokeStyle = `rgba(${accent},${alpha * 0.35})`;
             ctx.beginPath();
-            ctx.arc(p.x + (q.x - p.x) * progress, p.y + (q.y - p.y) * progress, 2, 0, Math.PI * 2);
+            ctx.moveTo(p.x, p.y);
+            ctx.lineTo(signalX, signalY);
+            ctx.stroke();
+            ctx.fillStyle = `rgba(${accent},${alpha * 0.12})`;
+            ctx.beginPath();
+            ctx.arc(signalX, signalY, 5, 0, Math.PI * 2);
             ctx.fill();
+            ctx.fillStyle = `rgba(${accent},${alpha})`;
+            ctx.beginPath();
+            ctx.arc(signalX, signalY, 1.8, 0, Math.PI * 2);
+            ctx.fill();
+            activity[i] = Math.max(activity[i], Math.max(0, 1 - progress * 5));
+            activity[j] = Math.max(activity[j], Math.max(0, (progress - 0.7) / 0.3));
           }
         });
         projected.forEach((p, i) => {
+          if (activity[i] > 0 && p.z > 0.1) {
+            const accent = accents[i % accents.length];
+            ctx.fillStyle = `rgba(${accent},${activity[i] * 0.14})`;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 3 + activity[i] * 3, 0, Math.PI * 2);
+            ctx.fill();
+          }
           const pulse = reduced.matches ? 0 : Math.max(0, Math.sin(elapsed * 0.0008 - points[i].y * 4)) * 0.15;
           ctx.fillStyle = `rgba(112,70,46,${0.12 + (p.z + 1) * 0.3 + pulse})`;
           ctx.beginPath();
@@ -408,7 +443,7 @@ export default function LabsExperience({ initialNetwork }: { initialNetwork: Net
               <Hive minds={network?.registeredMinds ?? null} />
               <span className={styles.artLabel}>THE HIVE MIND</span>
               <details className={styles.networkNote}>
-                <summary>About this network <Arrow /></summary>
+                <summary>About this network</summary>
                 <p>
                   {network
                     ? `Verified ${new Date(network.updatedAt).toISOString().slice(0, 10)} (UTC). `
