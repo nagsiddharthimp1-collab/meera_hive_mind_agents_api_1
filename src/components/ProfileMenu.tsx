@@ -121,13 +121,13 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
 
         <div className="px-3 pt-2 pb-2.5 border-b border-primary/15 space-y-2">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-sm font-semibold text-primary">#MEERA Tokens Earned</p>
+            <p className="text-sm font-semibold text-primary">Meera Coins Earned</p>
             <button
               type="button"
               onClick={() => setIsRewardsDialogOpen(true)}
               className="grid h-6 w-6 place-items-center rounded-md text-primary/70 transition-colors hover:bg-primary/10 hover:text-primary"
-              aria-label="Open MEERA Rewards"
-              title="AI tokens are consumed when you use Meera. Your usage is converted into MEERA rewards."
+              aria-label="Open Meera Wallet"
+              title="You earn Meera Coins by using Meera. View your earned coins in Meera Wallet."
             >
               <FiInfo size={14} />
             </button>
