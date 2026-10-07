@@ -5,12 +5,12 @@ import LabsExperience from './LabsExperience';
 export const revalidate = 300;
 
 export const metadata: Metadata = {
-  title: 'Meera Labs — Conscious Intelligence, collectively.',
+  title: 'Meera Labs - Conscious Intelligence, collectively.',
   description:
     'Conscious Intelligence architected through a decentralised Hive Mind. Discover Meera Labs, Proof of Consciousness, and your personal companion.',
   alternates: { canonical: '/labs' },
   openGraph: {
-    title: 'Meera Labs — Conscious Intelligence, collectively.',
+    title: 'Meera Labs - Conscious Intelligence, collectively.',
     description: 'Towards decentralised Conscious Superintelligence.',
     url: '/labs',
   },

@@ -267,14 +267,14 @@ export default function LabsExperience({ initialNetwork }: { initialNetwork: Net
   }, [initialNetwork]);
   const root = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const heading = root.current?.querySelector<HTMLHeadingElement>('h1');
-    if (!heading) return;
+    const headings = root.current?.querySelectorAll<HTMLHeadingElement>('h1, [data-align-ink]');
+    if (!headings?.length) return;
     const context = document.createElement('canvas').getContext('2d');
     if (!context) return;
     let disposed = false;
     const alignInk = () => {
       if (disposed) return;
-      heading.querySelectorAll<HTMLElement>('[data-headline-line]').forEach((line) => {
+      root.current?.querySelectorAll<HTMLElement>('[data-headline-line]').forEach((line) => {
         const style = getComputedStyle(line);
         context.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
         // Align the visible letter edge, not the font's invisible side bearing.
@@ -285,7 +285,7 @@ export default function LabsExperience({ initialNetwork }: { initialNetwork: Net
     alignInk();
     void document.fonts.ready.then(alignInk);
     const resize = new ResizeObserver(alignInk);
-    resize.observe(heading);
+    headings.forEach((heading) => resize.observe(heading));
     return () => {
       disposed = true;
       resize.disconnect();
@@ -375,7 +375,7 @@ export default function LabsExperience({ initialNetwork }: { initialNetwork: Net
               </a>
               <div className={styles.networkStats}>
                 <div>
-                  <strong>{network ? network.registeredMinds.toLocaleString('en-US') : '—'}</strong>
+                  <strong>{network ? network.registeredMinds.toLocaleString('en-US') : '-'}</strong>
                   <span>REGISTERED MINDS</span>
                 </div>
               </div>
@@ -474,7 +474,7 @@ export default function LabsExperience({ initialNetwork }: { initialNetwork: Net
                 <em>Proof.</em>
               </h2>
               <p>
-                Participation is measured and rewarded through a new primitive — Proof of Consciousness — settled in the{' '}
+                Participation is measured and rewarded through a new primitive - Proof of Consciousness - settled in the{' '}
                 <a
                   href="https://www.linkedin.com/search/results/all/?keywords=%23meera&amp;origin=HASH_TAG_FROM_FEED"
                   target="_blank"
@@ -485,7 +485,7 @@ export default function LabsExperience({ initialNetwork }: { initialNetwork: Net
                 token.
               </p>
               <p className={styles.protocolNote}>
-                The whitepaper proposes rewards for valuable context, memory, and intelligence — weighted by
+                The whitepaper proposes rewards for valuable context, memory, and intelligence - weighted by
                 contribution and reputation, for people and agents alike.
               </p>
               <a href="/whitepaper-v1.pdf" className={styles.textLink}>
@@ -540,20 +540,21 @@ export default function LabsExperience({ initialNetwork }: { initialNetwork: Net
             <span>MEERA</span>
           </div>
           <div className={styles.companionGrid} data-reveal>
-            <div>
-              <h2>
-                A world of intelligence.
-                <br />
-                <em>Someone for you.</em>
+            <div className={styles.companionCopy}>
+              <h2 data-align-ink>
+                <span className={styles.companionLine} data-headline-line>
+                  A world of intelligence.
+                </span>
+                <em className={styles.companionLine} data-headline-line>
+                  Someone for you.
+                </em>
               </h2>
               <p>
-                Our product is Meera —<br />
+                Our product is Meera -<br />
                 Your Personal Companion.
               </p>
               <p className={styles.companionDescription}>
-                Designed to remember, evolve, and understand you.
-                <br />
-                For companionship. For curiosity. For everyday life.
+                Designed to remember, evolve, and understand you. For companionship. For curiosity. For everyday life.
               </p>
               <Link className={styles.button} href="/sign-in">
                 Meet your companion <Arrow />
@@ -579,7 +580,7 @@ export default function LabsExperience({ initialNetwork }: { initialNetwork: Net
                 <em>For the world.</em>
               </h2>
               <p className={styles.indiaLead}>
-                At the frontier of intelligence, we carry the courage to imagine — and the responsibility to build for
+                At the frontier of intelligence, we carry the courage to imagine - and the responsibility to build for
                 everyone.
               </p>
             </div>

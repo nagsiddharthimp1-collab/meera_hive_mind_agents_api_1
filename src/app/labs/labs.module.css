@@ -584,6 +584,36 @@
   color: var(--muted);
   margin: 30px 0;
 }
+.companionCopy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 24px;
+}
+.companionLine {
+  display: block;
+  text-indent: var(--ink-offset, 0px);
+}
+.companionCopy h2 {
+  margin-bottom: 8px;
+}
+.companion .companionCopy p {
+  margin: 0;
+}
+.companionCopy .button {
+  margin-top: 8px;
+  min-width: 230px;
+  max-width: 100%;
+  justify-content: space-between;
+}
+.companion .companionGrid {
+  min-height: clamp(400px, 36vw, 540px);
+}
+.companion .companionArt {
+  aspect-ratio: auto;
+  align-self: stretch;
+  min-height: 360px;
+}
 .button {
   display: inline-flex;
   align-items: center;
@@ -1096,6 +1126,16 @@
     margin: 0 auto;
     aspect-ratio: 1.1;
   }
+  .companion .companionGrid {
+    min-height: 0;
+    gap: 32px;
+  }
+  .companion .companionArt {
+    min-height: 280px;
+  }
+  .companionCopy {
+    gap: 20px;
+  }
   .footer {
     padding: 32px var(--gutter) 20px;
   }
@@ -1254,10 +1294,10 @@
   justify-self: start;
 }
 .companion p.companionDescription {
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.8;
   max-width: 400px;
-  margin: -12px 0 28px;
+  margin: 0;
 }
 .connector:after {
   animation: contextFlow 4s ease-in-out infinite;
@@ -1327,6 +1367,6 @@
     grid-column: 1;
   }
   .companion p.companionDescription {
-    font-size: 12px;
+    font-size: 14px;
   }
 }
