@@ -1543,13 +1543,13 @@ export const Conversation: React.FC = () => {
   }, [fetchState.isLoading, chatMessages.length]);
 
   useEffect(() => {
-    if (!initialLoadDone.current && supabaseUserId) {
+    if (!initialLoadDone.current) {
       loadChatHistory(1, true);
       getSystemInfo();
       if (!isTouchChatViewport()) inputRef.current?.focus({ preventScroll: true });
       initialLoadDone.current = true;
     }
-  }, [loadChatHistory, supabaseUserId]);
+  }, [loadChatHistory]);
 
   useEffect(() => {
     let active = true;
@@ -2030,7 +2030,7 @@ export const Conversation: React.FC = () => {
                           const isLastFailedMessage = msg.message_id === lastFailedMessageId;
 
                           const storedThoughts = (msg as unknown as { thoughts?: string }).thoughts;
-                          const effectiveThoughtText = (isStreamingMessage ? currentThoughtText : '') || storedThoughts || undefined;
+                          const effectiveThoughtText = currentThoughtText || storedThoughts || undefined;
 
                           const shouldShowTypingIndicator =
                             msg.content_type === 'assistant' &&
@@ -2190,7 +2190,6 @@ export const Conversation: React.FC = () => {
                     contain: 'layout',
                   }}
                   rows={1}
-                  readOnly={!supabaseUserId}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && e.nativeEvent.keyCode !== 229) {
                       e.preventDefault();
@@ -2211,7 +2210,7 @@ export const Conversation: React.FC = () => {
                     <button
                       type="button"
                       onClick={stableCallbacks.toggleSearchActive}
-                      className={`min-h-11 py-2 px-3 rounded-2xl flex items-center justify-center gap-2 border border-primary/20 focus:outline-none transition-all duration-150 ease-in-out text-sm font-medium cursor-pointer ${
+                      className={`py-2 px-3 rounded-2xl flex items-center justify-center gap-2 border border-primary/20 focus:outline-none transition-all duration-150 ease-in-out text-sm font-medium cursor-pointer ${
                         isSearchActive ? 'bg-primary/10 text-primary' : 'text-gray-500 hover:bg-gray-50'
                       }`}
                       title="Search"

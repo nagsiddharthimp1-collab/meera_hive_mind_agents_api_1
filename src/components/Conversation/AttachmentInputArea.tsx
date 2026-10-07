@@ -179,9 +179,8 @@ export const AttachmentInputArea = forwardRef<AttachmentInputAreaRef, Props>(
         <button
           type="button"
           onClick={openFilePicker}
-          className="p-2 min-w-11 min-h-11 rounded-full hover:bg-primary/10 text-primary transition-all"
+          className="p-2 rounded-full hover:bg-primary/10 text-primary transition-all"
           title="Attach files"
-          aria-label="Attach files"
         >
           {children}
         </button>
