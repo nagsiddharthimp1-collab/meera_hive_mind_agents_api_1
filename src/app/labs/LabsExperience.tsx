@@ -267,6 +267,32 @@ export default function LabsExperience({ initialNetwork }: { initialNetwork: Net
   }, [initialNetwork]);
   const root = useRef<HTMLDivElement>(null);
   useEffect(() => {
+    const previousRestoration = window.history.scrollRestoration;
+    window.history.scrollRestoration = 'manual';
+    let firstFrame = 0;
+    let secondFrame = 0;
+    const startAtHome = () => {
+      cancelAnimationFrame(firstFrame);
+      cancelAnimationFrame(secondFrame);
+      if (window.location.hash) {
+        window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search);
+      }
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+      // Chrome can restore scroll during pageshow; reset once more after layout settles.
+      firstFrame = requestAnimationFrame(() => {
+        secondFrame = requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' }));
+      });
+    };
+    startAtHome();
+    window.addEventListener('pageshow', startAtHome);
+    return () => {
+      cancelAnimationFrame(firstFrame);
+      cancelAnimationFrame(secondFrame);
+      window.removeEventListener('pageshow', startAtHome);
+      window.history.scrollRestoration = previousRestoration;
+    };
+  }, []);
+  useEffect(() => {
     const headings = root.current?.querySelectorAll<HTMLHeadingElement>('h1, [data-align-ink]');
     if (!headings?.length) return;
     const context = document.createElement('canvas').getContext('2d');
@@ -323,7 +349,7 @@ export default function LabsExperience({ initialNetwork }: { initialNetwork: Net
       behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
       block: 'start',
     });
-    window.history.replaceState(null, '', hash || '#');
+    window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search);
     if (hash !== '#') {
       target.setAttribute('tabindex', '-1');
       target.focus({ preventScroll: true });
