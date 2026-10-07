@@ -112,7 +112,7 @@ function Hive({ minds }: { minds: number | null }) {
             ctx.arc(signalX, signalY, 1.8, 0, Math.PI * 2);
             ctx.fill();
             activity[i] = Math.max(activity[i], Math.max(0, 1 - progress * 5));
-            activity[j] = Math.max(activity[j], Math.max(0, (progress - 0.7) / 0.3));
+            activity[j] = Math.max(activity[j], progress > 0.7 ? Math.sin(((progress - 0.7) / 0.3) * Math.PI) : 0);
           }
         });
         projected.forEach((p, i) => {
