@@ -23,7 +23,7 @@ import { debounce, throttle } from '@/lib/utils';
 import { ChatAttachmentFromServer, ChatAttachmentInputState, ChatMessageFromServer } from '@/types/chat';
 import { useSession } from 'next-auth/react';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { FiArrowUp, FiGlobe, FiMenu, FiPaperclip } from 'react-icons/fi';
+import { FiArrowLeft, FiArrowUp, FiGlobe, FiMenu, FiPaperclip } from 'react-icons/fi';
 import { IoCallSharp } from 'react-icons/io5';
 import { MdKeyboardArrowDown } from 'react-icons/md';
 import { AttachmentInputArea, AttachmentInputAreaRef } from './AttachmentInputArea';
@@ -391,6 +391,8 @@ export const Conversation: React.FC = () => {
   const attachmentInputAreaRef = useRef<AttachmentInputAreaRef>(null);
   const lastOptimisticMessageIdRef = useRef<string | null>(null);
   const mainScrollRef = useRef<HTMLDivElement>(null);
+  const sidebarScrollPositions = useRef<Partial<Record<SidebarView, { top: number; atBottom: boolean }>>>({});
+  const pendingSidebarRestore = useRef(false);
   const chatShellRef = useRef<HTMLDivElement>(null);
   const initialLoadDone = useRef(false);
   const justSentMessageRef = useRef(false);
@@ -779,6 +781,16 @@ export const Conversation: React.FC = () => {
 
   const handleSelectSidebarView = useCallback(
     (view: SidebarView) => {
+      if (view === activeSidebarView) return;
+      const scroller = mainScrollRef.current;
+      if (scroller) {
+        sidebarScrollPositions.current[activeSidebarView] = {
+          top: scroller.scrollTop,
+          atBottom: scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 3,
+        };
+      }
+      if (hideDateStickyTimeoutRef.current) clearTimeout(hideDateStickyTimeoutRef.current);
+      pendingSidebarRestore.current = true;
       setActiveSidebarView(view);
 
       if (view === 'images') {
@@ -792,7 +804,7 @@ export const Conversation: React.FC = () => {
         void loadGeneratedImages(true);
       }
     },
-    [chatMessages, hasLoadedGallery, loadGeneratedImages, mergeGalleryItems],
+    [activeSidebarView, chatMessages, hasLoadedGallery, loadGeneratedImages, mergeGalleryItems],
   );
 
   const toggleStarForMessage = useCallback(
@@ -1399,19 +1411,13 @@ export const Conversation: React.FC = () => {
       isScrollingUp.current = currentScrollTop < lastScrollTop.current;
       lastScrollTop.current = currentScrollTop;
 
-      const direction =
-        currentScrollTop > lastScrollTopRef.current
-          ? 'down'
-          : currentScrollTop < lastScrollTopRef.current
-            ? 'up'
-            : 'still';
       lastScrollTopRef.current = currentScrollTop;
 
       if (scrollTimeoutRef2.current) clearTimeout(scrollTimeoutRef2.current);
 
       const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
       const isNotAtBottom = distanceFromBottom > 100;
-      setShowScrollToBottom(direction === 'up' && isNotAtBottom);
+      setShowScrollToBottom(isNotAtBottom);
 
       if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
       setIsUserNearTop(scrollTop < SCROLL_THRESHOLD);
@@ -1492,6 +1498,20 @@ export const Conversation: React.FC = () => {
     },
     [currentAttachments.length],
   );
+
+  useLayoutEffect(() => {
+    if (!pendingSidebarRestore.current) return;
+    if (inputRef.current) handleTextareaResize(inputRef.current);
+    const frame = requestAnimationFrame(() => {
+      pendingSidebarRestore.current = false;
+      const scroller = mainScrollRef.current;
+      if (!scroller || isJumpingRef.current) return;
+      const saved = sidebarScrollPositions.current[activeSidebarView];
+      scroller.scrollTop = saved?.atBottom ? scroller.scrollHeight : saved?.top ?? 0;
+      setShowScrollToBottom(scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight > 100);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [activeSidebarView, handleTextareaResize]);
 
   const debouncedTextareaResize = useMemo(
     () => debounce(handleTextareaResize, INPUT_DEBOUNCE_MS),
@@ -1764,7 +1784,7 @@ export const Conversation: React.FC = () => {
   }, []);
 
   const handleScrollToBottomClick = useCallback(() => {
-    scrollToBottom(true, true);
+    scrollToBottom(!window.matchMedia('(prefers-reduced-motion: reduce)').matches, true);
   }, [scrollToBottom]);
 
   const handleFormSubmit = useCallback(
@@ -1887,26 +1907,41 @@ export const Conversation: React.FC = () => {
           style={{ paddingTop: 'calc(env(safe-area-inset-top) + 1rem)' }}
         >
           <div className="w-full mx-auto flex items-center justify-between">
-            <button
-              onClick={handleOpenMobileSidebar}
-              className="md:hidden flex items-center justify-center w-9 h-9 rounded-full border-2 border-primary/20 hover:border-primary/50 transition-colors text-primary"
-              aria-label="Open sidebar"
-              title="Open sidebar"
-            >
-              <FiMenu size={18} className="text-primary" />
-            </button>
-
-            {!isSidebarVisible ? (
+            {isImagesView || isConnectorsView ? (
               <button
-                onClick={handleToggleDesktopSidebar}
-                className="hidden md:flex items-center justify-center w-9 h-9 rounded-full border-2 border-primary/20 hover:border-primary/50 transition-colors text-primary"
-                aria-label="Open sidebar"
-                title="Open sidebar"
+                type="button"
+                onClick={() => handleSelectSidebarView('chat')}
+                className="flex items-center justify-center w-11 h-11 rounded-full text-primary hover:bg-primary/10 transition-colors"
+                aria-label="Back to chat"
+                title="Back to chat"
               >
-                <FiMenu size={18} className="text-primary" />
+                <FiArrowLeft size={21} />
               </button>
             ) : (
-              <div className="w-9 h-9 hidden md:block" />
+              <>
+                <button
+                  onClick={handleOpenMobileSidebar}
+                  className="md:hidden flex items-center justify-center w-9 h-9 rounded-full border-2 border-primary/20 hover:border-primary/50 transition-colors text-primary"
+                  aria-label="Open sidebar"
+                  title="Open sidebar"
+                >
+                  <FiMenu size={18} className="text-primary" />
+                </button>
+
+                {!isSidebarVisible ? (
+                  <button
+                    onClick={handleToggleDesktopSidebar}
+                    className="hidden md:flex items-center justify-center w-9 h-9 rounded-full border-2 border-primary/20 hover:border-primary/50 transition-colors text-primary"
+                    aria-label="Open sidebar"
+                    title="Open sidebar"
+                  >
+                    <FiMenu size={18} className="text-primary" />
+                  </button>
+                ) : (
+                  <div className="w-9 h-9 hidden md:block" />
+                )}
+
+              </>
             )}
 
             <div className="absolute left-1/2 transform -translate-x-1/2 flex items-center">
@@ -1927,12 +1962,12 @@ export const Conversation: React.FC = () => {
           <div
             className={
               isImagesView || isConnectorsView
-                ? 'px-2 sm:px-0 py-6 w-full min-w-0 max-w-full sm:max-w-5xl xl:max-w-6xl mx-auto'
+                ? 'flex flex-col min-h-full px-2 sm:px-0 py-6 w-full min-w-0 max-w-full sm:max-w-5xl xl:max-w-6xl mx-auto'
                 : 'px-2 sm:px-0 py-6 w-full min-w-0 max-w-full sm:max-w-2xl md:max-w-3xl mx-auto'
             }
           >
             {isImagesView ? (
-              <div className="w-full max-w-6xl mx-auto">
+              <div className="flex flex-1 min-h-0 min-w-0 w-full max-w-6xl mx-auto">
                 <ImagesView
                   images={galleryImages}
                   isLoading={isGalleryLoading}
@@ -2113,6 +2148,17 @@ export const Conversation: React.FC = () => {
           style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.5rem)' }}
         >
           <div className="relative">
+            {showScrollToBottom && (
+              <button
+                type="button"
+                onClick={handleScrollToBottomClick}
+                className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-card text-primary border border-primary/20 shadow-md hover:bg-background transition-colors"
+                aria-label="Back to latest"
+                title="Back to latest"
+              >
+                <MdKeyboardArrowDown size={24} />
+              </button>
+            )}
             <div className="absolute bottom_full left-0 right-0 flex flex-col items-center mb-2">
               {!isSubscriptionLoading &&
                 !isSubscriptionError &&
@@ -2145,16 +2191,6 @@ export const Conversation: React.FC = () => {
                     </span>
                   </div>
                 )}
-
-              {showScrollToBottom && (
-                <button
-                  onClick={handleScrollToBottomClick}
-                  className="p-2 rounded-full bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 transition-all duration-200 hover:scale-105 shadow-md backdrop-blur-sm hidden"
-                  title="Scroll to bottom"
-                >
-                  <MdKeyboardArrowDown size={20} />
-                </button>
-              )}
 
               <div className="w-full pt-1 flex justify_center">
                 <Toast position="conversation" />

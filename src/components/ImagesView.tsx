@@ -52,7 +52,7 @@ export const ImagesView: React.FC<ImagesViewProps> = ({ images, isLoading, hasMo
 
   if (isLoading && images.length === 0) {
     return (
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2.5">
+      <div className="w-full min-w-0 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2.5">
         {Array.from({ length: 8 }).map((_, index) => (
           <div key={index} className="rounded-lg border border-primary/15 bg-primary/5 h-44 animate-pulse" />
         ))}
@@ -62,15 +62,15 @@ export const ImagesView: React.FC<ImagesViewProps> = ({ images, isLoading, hasMo
 
   if (!isLoading && images.length === 0) {
     return (
-      <div className="flex flex-col justify-center items-center h-[calc(100vh-10rem)] text-center">
+      <div className="flex flex-1 min-h-0 flex-col justify-center items-center py-8 text-center">
         <p className="text-primary/70 text-base">No generated images yet</p>
       </div>
     );
   }
 
   return (
-    <div>
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2.5">
+    <div className="w-full min-w-0">
+      <div className="w-full min-w-0 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2.5">
         {images.map((image, index) => (
           <button
             key={image.id}

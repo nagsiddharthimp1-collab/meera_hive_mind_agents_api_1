@@ -84,7 +84,7 @@ export function ConnectorsView() {
   ];
 
   return (
-    <section className="mx-auto w-full max-w-4xl px-3 py-4 sm:px-6 sm:py-8">
+    <section className="mx-auto min-w-0 w-full max-w-4xl px-3 py-4 sm:px-6 sm:py-8">
       <div className="mb-8">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary/50">Meera tools</p>
         <h2 className="mt-2 text-3xl font-semibold text-primary">Connectors</h2>
@@ -99,7 +99,7 @@ export function ConnectorsView() {
             key={key}
             className={`flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between ${index ? 'border-t border-primary/15' : ''}`}
           >
-            <div className="flex min-w-0 items-start gap-4">
+            <div className="flex flex-1 min-w-0 items-start gap-4">
               <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-primary/15 bg-background text-primary">
                 <Icon size={21} />
               </span>
@@ -136,11 +136,11 @@ export function ConnectorsView() {
           Google connectors are being configured. Try again shortly.
         </p>
       ) : null}
-      {error ? <p className="mt-4 text-sm text-red-600">{error}</p> : null}
+      {error ? <p className="mt-4 break-words text-sm text-red-600">{error}</p> : null}
 
       {connected ? (
         <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/15 px-4 py-3">
-          <p className="text-sm text-primary/65">Connected Google account: <span className="font-medium text-primary">{status.email}</span></p>
+          <p className="min-w-0 flex-1 break-words text-sm text-primary/65">Connected Google account: <span className="font-medium text-primary">{status.email}</span></p>
           <button type="button" onClick={() => void disconnect()} className="text-sm text-primary/65 underline underline-offset-4 hover:text-primary">
             Disconnect
           </button>
