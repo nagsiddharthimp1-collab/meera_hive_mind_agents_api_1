@@ -6,10 +6,14 @@ export function useChatScroll(scrollRef: RefObject<HTMLDivElement>, userId: stri
   const [showLatest, setShowLatest] = useState(false);
   const following = useRef(true);
   const restored = useRef(false);
+  const pendingScroll = useRef(0);
+  const lastTop = useRef(0);
   const key = userId ? `meera:chat-position:v1:${userId}` : null;
   const scrollToBottom = useCallback((_smooth = true, force = false) => {
     if (!force && !following.current) return;
-    requestAnimationFrame(() => {
+    cancelAnimationFrame(pendingScroll.current);
+    pendingScroll.current = requestAnimationFrame(() => {
+      pendingScroll.current = 0;
       const el = scrollRef.current;
       if (!el) return;
       if (!restored.current && !_smooth) {
@@ -38,6 +42,12 @@ export function useChatScroll(scrollRef: RefObject<HTMLDivElement>, userId: stri
     let frame = 0;
     const onScroll = () => {
       const away = el.scrollHeight - el.scrollTop - el.clientHeight > 100;
+      // Reading earlier messages takes precedence over a queued send-to-bottom movement.
+      if (away && el.scrollTop < lastTop.current) {
+        cancelAnimationFrame(pendingScroll.current);
+        pendingScroll.current = 0;
+      }
+      lastTop.current = el.scrollTop;
       following.current = !away;
       setShowLatest(away);
     };
@@ -65,6 +75,7 @@ export function useChatScroll(scrollRef: RefObject<HTMLDivElement>, userId: stri
     document.addEventListener('visibilitychange', onHidden);
     return () => {
       save();
+      cancelAnimationFrame(pendingScroll.current);
       cancelAnimationFrame(frame);
       observer.disconnect();
       el.removeEventListener('scroll', onScroll);
