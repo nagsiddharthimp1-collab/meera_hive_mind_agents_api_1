@@ -19,7 +19,7 @@ import { formatWhatsAppStyle, getLocalDateKeyFromTimestamp } from '@/lib/dateUti
 import { getSystemInfo } from '@/lib/deviceInfo';
 import { isPaidPlanExpired } from '@/lib/subscriptionUtils';
 import { supabase } from '@/lib/supabaseClient';
-import { throttle } from '@/lib/utils';
+import { debounce, throttle } from '@/lib/utils';
 import { ChatAttachmentFromServer, ChatAttachmentInputState, ChatMessageFromServer } from '@/types/chat';
 import { useSession } from 'next-auth/react';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -41,6 +41,7 @@ const DYNAMIC_MAX_HEIGHT_RATIO = 3.5;
 const SCROLL_THRESHOLD = 150;
 const FETCH_DEBOUNCE_MS = 300;
 const SCROLL_THROTTLE_MS = 16; // 60fps
+const INPUT_DEBOUNCE_MS = 16;
 const JUMP_DOM_POLL_INTERVAL_MS = 250;
 const JUMP_MAX_PAGE_LOADS = 200;
 const JUMP_SUPPRESS_AUTOLOAD_MS = 1400;
@@ -392,7 +393,6 @@ export const Conversation: React.FC = () => {
   const hideDateStickyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const isComposingRef = useRef(false);
   const attachmentInputAreaRef = useRef<AttachmentInputAreaRef>(null);
   const lastOptimisticMessageIdRef = useRef<string | null>(null);
   const mainScrollRef = useRef<HTMLDivElement>(null);
@@ -1458,13 +1458,18 @@ export const Conversation: React.FC = () => {
           textarea.scrollTop = shouldAutoScroll ? textarea.scrollHeight : currentScrollTop;
         }
 
-        if (shouldPreserveCursor && !isComposingRef.current) textarea.setSelectionRange(cursorPosition, selectionEnd);
+        if (shouldPreserveCursor) textarea.setSelectionRange(cursorPosition, selectionEnd);
       });
     },
     [currentAttachments.length],
   );
 
-  useLayoutEffect(() => {
+  const debouncedTextareaResize = useMemo(
+    () => debounce(handleTextareaResize, INPUT_DEBOUNCE_MS),
+    [handleTextareaResize],
+  );
+
+  useEffect(() => {
     if (inputRef.current) handleTextareaResize(inputRef.current);
   }, [dynamicMaxHeight, handleTextareaResize, message]);
 
@@ -2174,6 +2179,7 @@ export const Conversation: React.FC = () => {
                   value={message}
                   onChange={(e) => {
                     setMessage(e.target.value);
+                    debouncedTextareaResize(e.target);
                   }}
                   placeholder="Ask Meera"
                   className="w-full px-4 py-3 bg-transparent border-none resize-none outline-none text-primary placeholder-primary/50 text-base scrollbar-thin"
@@ -2185,10 +2191,8 @@ export const Conversation: React.FC = () => {
                   }}
                   rows={1}
                   readOnly={!supabaseUserId}
-                  onCompositionStart={() => { isComposingRef.current = true; }}
-                  onCompositionEnd={() => { isComposingRef.current = false; }}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey && !isComposingRef.current && !e.nativeEvent.isComposing && e.nativeEvent.keyCode !== 229) {
+                    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && e.nativeEvent.keyCode !== 229) {
                       e.preventDefault();
                       if (!canSubmit) return;
                       const form = e.currentTarget.form;

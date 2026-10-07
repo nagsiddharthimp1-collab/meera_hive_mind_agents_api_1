@@ -22,24 +22,8 @@
     <button id="retry" type="button">Try again</button>
   </main>
   <script>
-    let checking = false;
-    let retryTimer;
-    async function recover() {
-      if (checking || !navigator.onLine || document.visibilityState === 'hidden') return;
-      checking = true;
-      try {
-        // An online event can precede a usable connection. Confirm the server is reachable.
-        const response = await fetch('/offline.html', { cache: 'no-store' });
-        if (response.ok) { location.reload(); return; }
-      } catch (_) { /* Keep the recovery screen until the connection is usable. */ }
-      checking = false;
-      clearTimeout(retryTimer);
-      retryTimer = setTimeout(recover, 1500);
-    }
-    document.getElementById('retry').addEventListener('click', recover);
-    window.addEventListener('online', () => { clearTimeout(retryTimer); retryTimer = setTimeout(recover, 300); });
-    window.addEventListener('offline', () => clearTimeout(retryTimer));
-    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') recover(); });
+    document.getElementById('retry').addEventListener('click', () => location.reload());
+    window.addEventListener('online', () => location.reload());
   </script>
 </body>
 </html>

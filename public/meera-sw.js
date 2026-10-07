@@ -1,6 +1,5 @@
 /* Only public, immutable assets are cached. Chat, auth, API and HTML remain network-only. */
-// Bump this version when changing the offline document.
-const ASSETS = 'meera-public-assets-v3';
+const ASSETS = 'meera-public-assets-v2';
 const OFFLINE = '/offline.html';
 
 self.addEventListener('install', event => {
