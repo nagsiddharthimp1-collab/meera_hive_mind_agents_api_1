@@ -589,7 +589,7 @@ export default function LabsExperience({ initialNetwork }: { initialNetwork: Net
           <span>CORPORATE IDENTITY</span>
           <div>
             <strong>Meera Labs Inc.</strong>
-            <p>Legal company name</p>
+            <p>U.S. C-Corporation</p>
           </div>
         </div>
         <div className={styles.footerTop}>
@@ -597,13 +597,24 @@ export default function LabsExperience({ initialNetwork }: { initialNetwork: Net
             <Image className={styles.brandMark} src="/labs/meera-logo.svg" width={36} height={36} alt="" />
             <span className={styles.brandWordmark}>meera</span><span className={styles.labs}>LABS</span>
           </a>
-          <p>
-            A conscious future.
-            <br />A collective beginning.
-          </p>
-          <a href="#main" className={styles.textLink}>
-            Back to the beginning ↑
-          </a>
+          <div className={styles.footerContent}>
+            <p>
+              A conscious future.
+              <br />A collective beginning.
+            </p>
+            <div className={styles.footerActions}>
+              <a href="#main" className={styles.textLink}>
+                Back to the beginning ↑
+              </a>
+              <Link href="/sign-in" className={styles.button}>
+                Talk to Meera <Arrow />
+              </Link>
+            </div>
+            <div className={styles.footerContact}>
+              <span>FUNDING, HIRING &amp; OPERATIONS</span>
+              <a href="mailto:siddharth.nag@himeera.com">siddharth.nag@himeera.com <Arrow /></a>
+            </div>
+          </div>
         </div>
         <div className={styles.footerBottom}>
           <span>© {new Date().getFullYear()} Meera Labs Inc.</span>

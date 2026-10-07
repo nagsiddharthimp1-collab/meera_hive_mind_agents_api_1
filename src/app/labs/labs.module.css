@@ -771,6 +771,41 @@
   color: #737869;
   letter-spacing: -0.6px;
 }
+.footerContent {
+  min-width: 0;
+  display: grid;
+  gap: 28px;
+}
+.footerActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 20px 28px;
+}
+.footerContact {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+.footerContact > span {
+  font: 9px monospace;
+  letter-spacing: 1.2px;
+  color: var(--muted);
+}
+.footerContact > a {
+  display: inline-flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 44px;
+  max-width: 100%;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.footerContact > a:hover {
+  color: var(--accent);
+}
 .footerBottom {
   border-top: 1px solid var(--line);
   padding-top: 24px;
