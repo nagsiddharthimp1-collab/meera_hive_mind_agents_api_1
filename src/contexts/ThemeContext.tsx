@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react';
+import { createContext, ReactNode, useContext, useEffect, useState } from 'react';
 
 type Theme = 'light' | 'dark';
 
@@ -14,25 +14,36 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   // Default to light theme
-  const [theme, updateTheme] = useState<Theme>('light');
+  const [theme, setTheme] = useState<Theme>('light');
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    let savedTheme: Theme = 'light';
-    try { if (localStorage.getItem('theme') === 'dark') savedTheme = 'dark'; } catch { /* Use the default. */ }
-    updateTheme(savedTheme);
-    document.documentElement.setAttribute('data-theme', savedTheme);
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', savedTheme === 'dark' ? '#262624' : '#faf3e9');
+    // Only check localStorage after component is mounted to avoid hydration mismatch
+    setMounted(true);
+    const savedTheme = localStorage.getItem('theme') as Theme | null;
+
+    // If there's a saved theme in localStorage, use it
+    if (savedTheme) {
+      setTheme(savedTheme);
+      document.documentElement.setAttribute('data-theme', savedTheme);
+    } else {
+      // Otherwise default to light theme
+      document.documentElement.setAttribute('data-theme', 'light');
+    }
   }, []);
 
-  const setTheme = useCallback((next: Theme) => {
-    updateTheme(next);
-    try { localStorage.setItem('theme', next); } catch { /* Theme changes still work. */ }
-    document.documentElement.setAttribute('data-theme', next);
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', next === 'dark' ? '#262624' : '#faf3e9');
-  }, []);
-  const toggleTheme = () => setTheme(theme === 'light' ? 'dark' : 'light');
+  const toggleTheme = () => {
+    const newTheme = theme === 'light' ? 'dark' : 'light';
+    setTheme(newTheme);
+    localStorage.setItem('theme', newTheme);
+    document.documentElement.setAttribute('data-theme', newTheme);
+  };
 
-  // Keep the provider mounted from the first render so restoring a theme cannot remount the chat.
+  // For the first client-side render, don't show anything to avoid hydration mismatch
+  if (!mounted) {
+    return <>{children}</>;
+  }
+
   return <ThemeContext.Provider value={{ theme, toggleTheme, setTheme }}>{children}</ThemeContext.Provider>;
 }
 

@@ -55,17 +55,17 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export const viewport: Viewport = {
-  themeColor: '#faf3e9',
+  themeColor: '#0c3c26',
   width: 'device-width',
   initialScale: 1,
-  viewportFit: 'cover',
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en">
       <head>
-        <script dangerouslySetInnerHTML={{ __html: "try{var t=localStorage.getItem('theme')==='dark'?'dark':'light';document.documentElement.dataset.theme=t;document.querySelector('meta[name=\"theme-color\"]')?.setAttribute('content',t==='dark'?'#262624':'#faf3e9')}catch(e){}" }} />
         <MetaPixel />
       </head>
       <body className={`antialiased`} suppressHydrationWarning>

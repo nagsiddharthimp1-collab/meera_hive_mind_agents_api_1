@@ -20,7 +20,11 @@ interface PWAInstallContextType {
 
 const PWAInstallContext = createContext<PWAInstallContextType | undefined>(undefined);
 
-const RUNTIME_MIGRATION_STORAGE_KEY = 'meera:pwa-assets-migration:v2';
+const RUNTIME_MIGRATION_STORAGE_KEY = 'meera_runtime_migration_2026_03_29_global_fresh_start_v1';
+const CLIENT_STORAGE_RESET_KEY = 'meera_client_storage_reset_2026_03_29_global_fresh_start_v1';
+const CLIENT_SESSION_STORAGE_KEY_PREFIX = 'meera:chat_session_id:';
+const GUEST_TOKEN_STORAGE_KEY_PREFIX = 'guest_token';
+const STALE_CACHE_MARKERS = ['meera-os-cache', 'workbox', '-precache-', '-runtime-'];
 
 export const usePWAInstall = () => {
   const context = useContext(PWAInstallContext);
@@ -43,29 +47,89 @@ export const PWAInstallProvider = ({ children }: { children: ReactNode }) => {
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
-    // Retire only the legacy worker once. Never clear chat/session data or reload a draft.
-    const startWorker = async () => {
-      if (!('serviceWorker' in navigator)) return;
-      try {
-        if (localStorage.getItem(RUNTIME_MIGRATION_STORAGE_KEY) !== 'done') {
+    const runRuntimeMigration = async () => {
+      let changedRuntimeArtifacts = false;
+
+      if ('serviceWorker' in navigator) {
+        try {
           const registrations = await navigator.serviceWorker.getRegistrations();
-          for (const registration of registrations) {
-            const worker = registration.active || registration.waiting || registration.installing;
-            if (worker && new URL(worker.scriptURL).pathname === '/sw.js') await registration.unregister();
+          if (registrations.length > 0) {
+            changedRuntimeArtifacts = true;
           }
-          if ('caches' in window) {
-            const keys = await caches.keys();
-            await Promise.all(keys.filter(key => key.startsWith('meera-os-cache') || key.startsWith('workbox-precache')).map(key => caches.delete(key)));
+          await Promise.all(registrations.map((registration) => registration.unregister()));
+        } catch (error) {
+          console.warn('Service worker cleanup failed:', error);
+        }
+      }
+
+      if ('caches' in window) {
+        try {
+          const keys = await caches.keys();
+          const staleKeys = keys.filter((key) => STALE_CACHE_MARKERS.some((marker) => key.includes(marker)));
+          if (staleKeys.length > 0) {
+            changedRuntimeArtifacts = true;
           }
-          localStorage.setItem(RUNTIME_MIGRATION_STORAGE_KEY, 'done');
+          await Promise.all(staleKeys.map((key) => caches.delete(key)));
+        } catch (error) {
+          console.warn('Cache cleanup failed:', error);
         }
-        // Development HMR chunks must never be cached.
-        if (process.env.NODE_ENV === 'production') {
-          await navigator.serviceWorker.register('/meera-sw.js', { scope: '/', updateViaCache: 'none' });
+      }
+
+      if (!changedRuntimeArtifacts) return;
+
+      try {
+        if (window.sessionStorage.getItem(RUNTIME_MIGRATION_STORAGE_KEY) === 'done') {
+          return;
         }
-      } catch (error) { console.warn('PWA setup unavailable:', error); }
+        window.sessionStorage.setItem(RUNTIME_MIGRATION_STORAGE_KEY, 'done');
+      } catch {
+        // Ignore sessionStorage errors and continue without forced refresh.
+        return;
+      }
+
+      console.info('[runtime_migration] cleaned service worker artifacts, refreshing once');
+      window.location.replace(window.location.href);
     };
-    void startWorker();
+
+    const runClientStorageReset = () => {
+      if (typeof window === 'undefined') return;
+      try {
+        if (window.sessionStorage.getItem(CLIENT_STORAGE_RESET_KEY) === 'done') {
+          return;
+        }
+      } catch {
+        return;
+      }
+
+      try {
+        const localStorageKeysToDelete: string[] = [];
+        for (let idx = 0; idx < window.localStorage.length; idx += 1) {
+          const key = window.localStorage.key(idx);
+          if (!key) continue;
+          if (key.startsWith(CLIENT_SESSION_STORAGE_KEY_PREFIX)) {
+            localStorageKeysToDelete.push(key);
+            continue;
+          }
+          if (key === GUEST_TOKEN_STORAGE_KEY_PREFIX || key.startsWith(`${GUEST_TOKEN_STORAGE_KEY_PREFIX}_`)) {
+            localStorageKeysToDelete.push(key);
+          }
+        }
+        for (const key of localStorageKeysToDelete) {
+          window.localStorage.removeItem(key);
+        }
+      } catch (error) {
+        console.warn('Client storage cleanup failed:', error);
+      }
+
+      try {
+        window.sessionStorage.setItem(CLIENT_STORAGE_RESET_KEY, 'done');
+      } catch {
+        // Ignore sessionStorage errors and continue without forced refresh.
+      }
+    };
+
+    runClientStorageReset();
+    void runRuntimeMigration();
 
     if (typeof window !== 'undefined') {
       setIsStandalone(window.matchMedia('(display-mode: standalone)').matches);

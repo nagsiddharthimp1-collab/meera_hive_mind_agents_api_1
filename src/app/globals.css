@@ -146,16 +146,3 @@ html {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
-
-/* Keep gestures inside the conversation and accommodate device cutouts. */
-.meera-chat-shell main { overscroll-behavior-y: contain; }
-.meera-chat-shell header { padding-top: env(safe-area-inset-top, 0px); }
-.meera-chat-shell { padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
-@media (prefers-reduced-motion: reduce) {
-  .meera-chat-shell *, .meera-chat-shell *::before, .meera-chat-shell *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
-  }
-}
