@@ -1019,7 +1019,6 @@
   }
   .artLabel {
     font-size: 7px;
-    bottom: 5%;
   }
   .heroBottom {
     font-size: 7px;
@@ -1359,12 +1358,6 @@
   .hiveArt {
     margin-top: 20px;
     margin-bottom: 25px;
-  }
-  .artLabel {
-    bottom: 8%;
-  }
-  .networkNote {
-    bottom: -4%;
   }
   .researchNote {
     grid-template-columns: 1fr;
