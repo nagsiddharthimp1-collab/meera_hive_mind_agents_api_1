@@ -536,34 +536,23 @@ export default function LabsExperience({ initialNetwork }: { initialNetwork: Net
 
         <section id="companion" className={styles.companion}>
           <div className={styles.sectionLabel}>
-            <span>04 / THE PERSONAL EXPRESSION</span>
+              <span>04 / OUR PRODUCT</span>
             <span>MEERA</span>
           </div>
           <div className={styles.companionGrid} data-reveal>
+            <div className={styles.companionArt} aria-hidden="true">
+              <div className={styles.companionOrb} />
+              <span>meera</span>
+            </div>
             <div className={styles.companionCopy}>
-              <h2 data-align-ink>
-                <span className={styles.companionLine} data-headline-line>
-                  A world of intelligence.
-                </span>
-                <em className={styles.companionLine} data-headline-line>
-                  Someone for you.
-                </em>
-              </h2>
-              <p>
-                Our product is Meera -<br />
-                Your Personal Companion.
-              </p>
+              <h2>Your Personal Companion.</h2>
               <p className={styles.companionDescription}>
-                Designed to remember, evolve, and understand you. For companionship. For curiosity. For everyday life.
+                Meet Meera. Designed to remember, evolve, and understand you.
+                For companionship. For curiosity. For everyday life.
               </p>
               <Link className={styles.button} href="/sign-in">
                 Meet your companion <Arrow />
               </Link>
-            </div>
-            <div className={styles.companionArt}>
-              <div className={styles.companionOrb} />
-              <span>meera</span>
-              <small>YOUR PERSONAL COMPANION</small>
             </div>
           </div>
         </section>
