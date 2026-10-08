@@ -1,5 +1,6 @@
 // src/app/api/services/chat.ts
 import { streamMeera } from '@/lib/streamMeera';
+import { normalizeMessageTimestamp } from '@/lib/messageTimestamp';
 import {
   AgentRouteError,
   getAgentRouteErrorStatus,
@@ -62,7 +63,7 @@ type DbMessageRow = {
   user_id: string;
   content_type: string;
   content: string;
-  timestamp: string;
+  timestamp: string | null;
   session_id?: string | null;
   is_call?: boolean | null;
   model?: string | null;
@@ -393,7 +394,7 @@ function mapDbRowToChatMessage(row: DbMessageRow) {
     message_id: row.message_id,
     content_type: row.content_type === 'assistant' ? 'assistant' : 'user',
     content: row.content,
-    timestamp: row.timestamp,
+    timestamp: normalizeMessageTimestamp(row.timestamp),
     session_id: row.session_id || undefined,
     is_call: row.is_call ?? false,
     attachments: (row.attachments as ImageAttachment[] | null) ?? [],
@@ -556,7 +557,7 @@ export const chatService = {
         message_id: row.message_id,
         content_type: 'assistant' as const,
         content: row.content ?? '',
-        timestamp: row.timestamp,
+        timestamp: normalizeMessageTimestamp(row.timestamp),
         session_id: row.session_id || undefined,
         is_call: row.is_call ?? false,
         attachments:
@@ -622,6 +623,7 @@ export const chatService = {
 
       if (anchor) {
         anchorRow = anchor as DbMessageRow;
+        if (!anchorRow.timestamp) return { message: 'not_found', data: [] };
         anchorTimestamp = anchorRow.timestamp;
       } else if (normalizedTimestamp) {
         const parsedTimestamp = new Date(normalizedTimestamp).getTime();
