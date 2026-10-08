@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 
-// Navigation is a single move. Answer growth must not move the reader.
+// Keep navigation to the latest message distinct from a reader scrolling up.
 export function useChatScrollControls(scrollRef: RefObject<HTMLDivElement>, enabled: boolean) {
   const [showLatest, setShowLatest] = useState(false);
+  const following = useRef(false);
   const movingToLatest = useRef(false);
   const scrollFrame = useRef(0);
   const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -17,7 +18,8 @@ export function useChatScrollControls(scrollRef: RefObject<HTMLDivElement>, enab
     setShowLatest(previous => movingToLatest.current ? false : gap > 100 ? true : gap < 48 ? false : previous);
   }, [scrollRef]);
 
-  const cancelNavigation = useCallback(() => {
+  const cancelFollowing = useCallback(() => {
+    following.current = false;
     movingToLatest.current = false;
     cancelAnimationFrame(scrollFrame.current);
     if (settleTimer.current) clearTimeout(settleTimer.current);
@@ -27,6 +29,7 @@ export function useChatScrollControls(scrollRef: RefObject<HTMLDivElement>, enab
   const scrollToBottom = useCallback((smooth = true, force = false) => {
     const scroll = scrollRef.current;
     if (!scroll || !force) return;
+    following.current = true;
     movingToLatest.current = true;
     setShowLatest(false);
     cancelAnimationFrame(scrollFrame.current);
@@ -43,13 +46,15 @@ export function useChatScrollControls(scrollRef: RefObject<HTMLDivElement>, enab
     const scroll = scrollRef.current;
     if (!scroll || !enabled) return;
     let resizeFrame = 0;
-    let lastScrollTop = scroll.scrollTop;
+    let previousTop = scroll.scrollTop;
     let previousHeight = scroll.scrollHeight;
-    let previousViewport = scroll.clientHeight;
+    following.current = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 48;
 
     const finish = () => {
       if (!movingToLatest.current) return;
       if (settleTimer.current) clearTimeout(settleTimer.current);
+      // A reply may have grown while the single smooth navigation was running.
+      if (following.current) scroll.scrollTop = scroll.scrollHeight;
       movingToLatest.current = false;
       updateVisibility();
     };
@@ -60,26 +65,22 @@ export function useChatScrollControls(scrollRef: RefObject<HTMLDivElement>, enab
         if (settleTimer.current) clearTimeout(settleTimer.current);
         // Fallback for browsers without scrollend.
         settleTimer.current = setTimeout(finish, 120);
+      } else {
+        const gap = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight;
+        if (gap < 48) following.current = true;
+        else if (scroll.scrollTop < previousTop - 1 && scroll.scrollHeight === previousHeight) following.current = false;
       }
-      lastScrollTop = scroll.scrollTop;
+      previousTop = scroll.scrollTop;
+      previousHeight = scroll.scrollHeight;
       updateVisibility();
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(event.key)) cancelNavigation();
+      if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(event.key)) cancelFollowing();
     };
     const observer = new ResizeObserver(() => {
       cancelAnimationFrame(resizeFrame);
       resizeFrame = requestAnimationFrame(() => {
-        // Preserve existing bottom placement when only the composer/viewport
-        // changes size. A growing answer only updates the arrow's visibility.
-        const viewportChanged = scroll.clientHeight !== previousViewport;
-        const contentUnchanged = scroll.scrollHeight === previousHeight;
-        const wasAtBottom = previousHeight - lastScrollTop - previousViewport < 48;
-        if (viewportChanged && contentUnchanged && wasAtBottom && !movingToLatest.current) {
-          scroll.scrollTop = scroll.scrollHeight;
-        }
-        previousViewport = scroll.clientHeight;
-        previousHeight = scroll.scrollHeight;
+        if (following.current && !movingToLatest.current) scroll.scrollTop = scroll.scrollHeight;
         updateVisibility();
       });
     });
@@ -87,8 +88,8 @@ export function useChatScrollControls(scrollRef: RefObject<HTMLDivElement>, enab
     if (scroll.firstElementChild) observer.observe(scroll.firstElementChild);
     scroll.addEventListener('scroll', onScroll, { passive: true });
     scroll.addEventListener('scrollend', finish);
-    scroll.addEventListener('wheel', cancelNavigation, { passive: true });
-    scroll.addEventListener('touchmove', cancelNavigation, { passive: true });
+    scroll.addEventListener('wheel', cancelFollowing, { passive: true });
+    scroll.addEventListener('touchmove', cancelFollowing, { passive: true });
     scroll.addEventListener('keydown', onKeyDown);
     updateVisibility();
 
@@ -101,11 +102,11 @@ export function useChatScrollControls(scrollRef: RefObject<HTMLDivElement>, enab
       finishMove.current = () => {};
       scroll.removeEventListener('scroll', onScroll);
       scroll.removeEventListener('scrollend', finish);
-      scroll.removeEventListener('wheel', cancelNavigation);
-      scroll.removeEventListener('touchmove', cancelNavigation);
+      scroll.removeEventListener('wheel', cancelFollowing);
+      scroll.removeEventListener('touchmove', cancelFollowing);
       scroll.removeEventListener('keydown', onKeyDown);
     };
-  }, [cancelNavigation, enabled, scrollRef, updateVisibility]);
+  }, [cancelFollowing, enabled, scrollRef, updateVisibility]);
 
-  return { showLatest, scrollToBottom, cancelNavigation };
+  return { showLatest, scrollToBottom, cancelFollowing };
 }

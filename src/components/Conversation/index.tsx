@@ -961,7 +961,7 @@ export const Conversation: React.FC = () => {
     ],
   );
 
-  const { showLatest: showScrollToBottom, scrollToBottom, cancelNavigation } = useChatScrollControls(
+  const { showLatest: showScrollToBottom, scrollToBottom, cancelFollowing } = useChatScrollControls(
     mainScrollRef,
     activeSidebarView === 'chat' && !isInitialLoading,
   );
@@ -1156,7 +1156,7 @@ export const Conversation: React.FC = () => {
   const handleJumpToMessage = useCallback(
     (starredMessage: ChatMessageFromServer) => {
       if (isJumpingRef.current) return;
-      cancelNavigation();
+      cancelFollowing();
       const isAssistantStarred = starredMessage.content_type === 'assistant';
 
       const exactMessageId = asTrimmedString(starredMessage.message_id);
@@ -1383,7 +1383,7 @@ export const Conversation: React.FC = () => {
       clearToasts,
       findNearestMessageIdByTimestamp,
       findQuestionByUserContext,
-      cancelNavigation,
+      cancelFollowing,
       flashJumpTarget,
       loadChatHistory,
       mergeMessagesIntoState,
@@ -1573,9 +1573,12 @@ export const Conversation: React.FC = () => {
       const scrollContainer = mainScrollRef.current;
       const heightDifference = scrollContainer.scrollHeight - previousScrollHeight.current;
 
-      previousScrollHeight.current = 0;
-      // Restore before paint so prepending history never flashes a shifted view.
-      if (heightDifference > 0) scrollContainer.scrollTop += heightDifference;
+      if (heightDifference > 0) {
+        requestAnimationFrame(() => {
+          scrollContainer.scrollTop += heightDifference;
+          previousScrollHeight.current = 0;
+        });
+      }
     }
   }, [fetchState.isLoading, chatMessages.length]);
 
@@ -1937,7 +1940,7 @@ export const Conversation: React.FC = () => {
 
         <main
           ref={mainScrollRef}
-          className="min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-none [overflow-anchor:none] w-full scroll-pt-2.5"
+          className="min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-none w-full scroll-pt-2.5"
           onScroll={isImagesView || isConnectorsView ? undefined : handleScroll}
         >
           <div
@@ -1985,8 +1988,8 @@ export const Conversation: React.FC = () => {
             {!isInitialLoading && chatMessages.length > 0 && (
               <div className="flex flex-col space-y-0 w-full min-w-0">
                 {fetchState.isLoading && isUserNearTop && (
-                  <div className="sticky h-0 top-0 z-10">
-                    <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-background/80 backdrop-blur-sm rounded-full p-2 shadow-sm border border-primary/10">
+                  <div className="flex justify-center py-4 sticky top-0 z-10">
+                    <div className="bg-background/80 backdrop-blur-sm rounded-full p-2 shadow-sm border border-primary/10">
                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
                     </div>
                   </div>
