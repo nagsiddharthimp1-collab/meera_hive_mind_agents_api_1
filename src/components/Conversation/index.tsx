@@ -10,7 +10,6 @@ import { Toast } from '@/components/ui/Toast';
 import { useToast } from '@/components/ui/ToastProvider';
 import { usePricingModal } from '@/contexts/PricingModalContext';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
-import { useChatScrollControls } from '@/hooks/useChatScrollControls';
 import { getChatViewportHeight, isTouchChatViewport, useChatViewport } from '@/hooks/useChatViewport';
 import { useDragAndDrop } from '@/hooks/useDragAndDrop';
 import { useMessageSubmission } from '@/hooks/useMessageSubmission';
@@ -347,6 +346,7 @@ export const Conversation: React.FC = () => {
   const [isSearchActive, setIsSearchActive] = useState(true);
   const [currentThoughtText, setCurrentThoughtText] = useState('');
   const [dynamicMinHeight, setDynamicMinHeight] = useState<number>(500);
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [starredMessageIds, setStarredMessageIds] = useState<string[]>([]);
   const [starredMessageSnapshots, setStarredMessageSnapshots] = useState<ChatMessageFromServer[]>([]);
   const [isSidebarVisible, setIsSidebarVisible] = useState(false);
@@ -395,6 +395,7 @@ export const Conversation: React.FC = () => {
   const pendingSidebarRestore = useRef(false);
   const chatShellRef = useRef<HTMLDivElement>(null);
   const initialLoadDone = useRef(false);
+  const justSentMessageRef = useRef(false);
   const spacerRef = useRef<HTMLDivElement>(null);
 
   const headerRef = useRef<HTMLElement>(null);
@@ -961,10 +962,18 @@ export const Conversation: React.FC = () => {
     ],
   );
 
-  const { showLatest: showScrollToBottom, scrollToBottom } = useChatScrollControls(
-    mainScrollRef,
-    activeSidebarView === 'chat' && !isInitialLoading,
-  );
+  const scrollToBottom = useCallback((smooth: boolean = true, force: boolean = false) => {
+    const el = mainScrollRef.current;
+    if (!el) return;
+    if (!force) return;
+
+    requestAnimationFrame(() => {
+      el.scrollTo({
+        top: el.scrollHeight,
+        behavior: smooth ? 'smooth' : 'auto',
+      });
+    });
+  }, []);
 
   useEffect(() => {
     if (!ENABLE_LEGACY_HISTORY_IMPORT) return;
@@ -1388,7 +1397,7 @@ export const Conversation: React.FC = () => {
 
   const handleScrollInternal = useCallback(
     (e: React.UIEvent<HTMLDivElement>) => {
-      const { scrollTop } = e.currentTarget;
+      const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
       const currentFetchState = fetchStateRef.current;
 
       if (!showDateSticky) setShowDateSticky(true);
@@ -1405,6 +1414,10 @@ export const Conversation: React.FC = () => {
       lastScrollTopRef.current = currentScrollTop;
 
       if (scrollTimeoutRef2.current) clearTimeout(scrollTimeoutRef2.current);
+
+      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+      const isNotAtBottom = distanceFromBottom > 100;
+      setShowScrollToBottom(isNotAtBottom);
 
       if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
       setIsUserNearTop(scrollTop < SCROLL_THRESHOLD);
@@ -1495,6 +1508,7 @@ export const Conversation: React.FC = () => {
       if (!scroller || isJumpingRef.current) return;
       const saved = sidebarScrollPositions.current[activeSidebarView];
       scroller.scrollTop = saved?.atBottom ? scroller.scrollHeight : saved?.top ?? 0;
+      setShowScrollToBottom(scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight > 100);
     });
     return () => cancelAnimationFrame(frame);
   }, [activeSidebarView, handleTextareaResize]);
@@ -1744,6 +1758,13 @@ export const Conversation: React.FC = () => {
   }, [mergeGalleryItems, mergeMessagesIntoState, supabaseUserId]);
 
   useEffect(() => {
+    if (justSentMessageRef.current) {
+      scrollToBottom(true, true);
+      justSentMessageRef.current = false;
+    }
+  }, [chatMessages, scrollToBottom]);
+
+  useEffect(() => {
     return () => {
       currentAttachments.forEach((att) => att.previewUrl && URL.revokeObjectURL(att.previewUrl));
     };
@@ -1770,6 +1791,7 @@ export const Conversation: React.FC = () => {
     (e: React.FormEvent) => {
       e.preventDefault();
       if (!canSubmit) return;
+      justSentMessageRef.current = true;
       executeSubmission(message, currentAttachments);
     },
     [
