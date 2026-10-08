@@ -10,6 +10,7 @@ import { Toast } from '@/components/ui/Toast';
 import { useToast } from '@/components/ui/ToastProvider';
 import { usePricingModal } from '@/contexts/PricingModalContext';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
+import { useChatScrollControls } from '@/hooks/useChatScrollControls';
 import { getChatViewportHeight, isTouchChatViewport, useChatViewport } from '@/hooks/useChatViewport';
 import { useDragAndDrop } from '@/hooks/useDragAndDrop';
 import { useMessageSubmission } from '@/hooks/useMessageSubmission';
@@ -346,7 +347,6 @@ export const Conversation: React.FC = () => {
   const [isSearchActive, setIsSearchActive] = useState(true);
   const [currentThoughtText, setCurrentThoughtText] = useState('');
   const [dynamicMinHeight, setDynamicMinHeight] = useState<number>(500);
-  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [starredMessageIds, setStarredMessageIds] = useState<string[]>([]);
   const [starredMessageSnapshots, setStarredMessageSnapshots] = useState<ChatMessageFromServer[]>([]);
   const [isSidebarVisible, setIsSidebarVisible] = useState(false);
@@ -962,18 +962,7 @@ export const Conversation: React.FC = () => {
     ],
   );
 
-  const scrollToBottom = useCallback((smooth: boolean = true, force: boolean = false) => {
-    const el = mainScrollRef.current;
-    if (!el) return;
-    if (!force) return;
-
-    requestAnimationFrame(() => {
-      el.scrollTo({
-        top: el.scrollHeight,
-        behavior: smooth ? 'smooth' : 'auto',
-      });
-    });
-  }, []);
+  const { showScrollToBottom, scrollToBottom } = useChatScrollControls(mainScrollRef, activeSidebarView === 'chat');
 
   useEffect(() => {
     if (!ENABLE_LEGACY_HISTORY_IMPORT) return;
@@ -1397,7 +1386,7 @@ export const Conversation: React.FC = () => {
 
   const handleScrollInternal = useCallback(
     (e: React.UIEvent<HTMLDivElement>) => {
-      const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+      const { scrollTop } = e.currentTarget;
       const currentFetchState = fetchStateRef.current;
 
       if (!showDateSticky) setShowDateSticky(true);
@@ -1414,10 +1403,6 @@ export const Conversation: React.FC = () => {
       lastScrollTopRef.current = currentScrollTop;
 
       if (scrollTimeoutRef2.current) clearTimeout(scrollTimeoutRef2.current);
-
-      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-      const isNotAtBottom = distanceFromBottom > 100;
-      setShowScrollToBottom(isNotAtBottom);
 
       if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
       setIsUserNearTop(scrollTop < SCROLL_THRESHOLD);
@@ -1508,7 +1493,6 @@ export const Conversation: React.FC = () => {
       if (!scroller || isJumpingRef.current) return;
       const saved = sidebarScrollPositions.current[activeSidebarView];
       scroller.scrollTop = saved?.atBottom ? scroller.scrollHeight : saved?.top ?? 0;
-      setShowScrollToBottom(scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight > 100);
     });
     return () => cancelAnimationFrame(frame);
   }, [activeSidebarView, handleTextareaResize]);
