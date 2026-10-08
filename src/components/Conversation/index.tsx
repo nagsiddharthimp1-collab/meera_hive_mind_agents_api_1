@@ -961,7 +961,7 @@ export const Conversation: React.FC = () => {
     ],
   );
 
-  const { showLatest: showScrollToBottom, scrollToBottom, cancelFollowing } = useChatScrollControls(
+  const { showLatest: showScrollToBottom, scrollToBottom } = useChatScrollControls(
     mainScrollRef,
     activeSidebarView === 'chat' && !isInitialLoading,
   );
@@ -1156,7 +1156,6 @@ export const Conversation: React.FC = () => {
   const handleJumpToMessage = useCallback(
     (starredMessage: ChatMessageFromServer) => {
       if (isJumpingRef.current) return;
-      cancelFollowing();
       const isAssistantStarred = starredMessage.content_type === 'assistant';
 
       const exactMessageId = asTrimmedString(starredMessage.message_id);
@@ -1179,12 +1178,7 @@ export const Conversation: React.FC = () => {
           if (!targetElement) return false;
 
           clearToasts('conversation');
-          const scroller = mainScrollRef.current;
-          if (!scroller) return false;
-          scroller.scrollTo({
-            top: scroller.scrollTop + targetElement.getBoundingClientRect().top - scroller.getBoundingClientRect().top - 10,
-            behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
-          });
+          targetElement.scrollIntoView({ block: 'start', behavior: 'smooth', inline: 'nearest' });
           flashJumpTarget(targetId);
           suppressAutoLoadUntilRef.current = Date.now() + JUMP_STAY_PUT_MS;
           return true;
@@ -1383,7 +1377,6 @@ export const Conversation: React.FC = () => {
       clearToasts,
       findNearestMessageIdByTimestamp,
       findQuestionByUserContext,
-      cancelFollowing,
       flashJumpTarget,
       loadChatHistory,
       mergeMessagesIntoState,
@@ -1398,7 +1391,7 @@ export const Conversation: React.FC = () => {
       const { scrollTop } = e.currentTarget;
       const currentFetchState = fetchStateRef.current;
 
-      setShowDateSticky(true);
+      if (!showDateSticky) setShowDateSticky(true);
       if (hideDateStickyTimeoutRef.current) clearTimeout(hideDateStickyTimeoutRef.current);
 
       hideDateStickyTimeoutRef.current = setTimeout(() => {
@@ -1434,6 +1427,7 @@ export const Conversation: React.FC = () => {
     [
       isInitialLoading,
       loadChatHistory,
+      showDateSticky,
     ],
   );
 
@@ -1940,7 +1934,7 @@ export const Conversation: React.FC = () => {
 
         <main
           ref={mainScrollRef}
-          className="min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-none w-full scroll-pt-2.5"
+          className="min-h-0 overflow-y-auto overflow-x-hidden w-full scroll-pt-2.5"
           onScroll={isImagesView || isConnectorsView ? undefined : handleScroll}
         >
           <div
@@ -2000,12 +1994,10 @@ export const Conversation: React.FC = () => {
 
                   return (
                     <div key={dateKey} className="date-group relative w-full min-w-0">
-                      {dateHeader && (
-                        <div className="sticky h-0 z-20 top-0 pointer-events-none" aria-hidden={!showDateSticky}>
-                          <div className={`absolute inset-x-0 top-2 flex justify-center transition-opacity duration-150 ${showDateSticky ? 'opacity-100' : 'opacity-0'}`}>
-                            <div className="bg-background text-primary text-xs px-4 py-1.5 rounded-full shadow-sm border border-primary/10">
-                              {dateHeader}
-                            </div>
+                      {dateHeader && showDateSticky && (
+                        <div className="sticky pt-2 z-20 flex justify-center my-3 top-0 pointer-events-none">
+                          <div className="bg-background text-primary text-xs px-4 py-1.5 rounded-full shadow-sm border border-primary/10">
+                            {dateHeader}
                           </div>
                         </div>
                       )}
