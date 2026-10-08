@@ -380,7 +380,7 @@ export const useMessageSubmission = ({
         onMessageSent?.();
 
         // Only scroll on user's own send
-        setTimeout(() => scrollToBottom(true, true), 150);
+        scrollToBottom(true, true);
       } else {
         setChatMessages((prev) =>
           prev.map((msg) => (msg.message_id === optimisticId ? { ...msg, failed: false, try_number: tryNumber } : msg)),

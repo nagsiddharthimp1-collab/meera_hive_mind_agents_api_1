@@ -10,6 +10,7 @@ import { Toast } from '@/components/ui/Toast';
 import { useToast } from '@/components/ui/ToastProvider';
 import { usePricingModal } from '@/contexts/PricingModalContext';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
+import { useChatScrollControls } from '@/hooks/useChatScrollControls';
 import { getChatViewportHeight, isTouchChatViewport, useChatViewport } from '@/hooks/useChatViewport';
 import { useDragAndDrop } from '@/hooks/useDragAndDrop';
 import { useMessageSubmission } from '@/hooks/useMessageSubmission';
@@ -346,7 +347,6 @@ export const Conversation: React.FC = () => {
   const [isSearchActive, setIsSearchActive] = useState(true);
   const [currentThoughtText, setCurrentThoughtText] = useState('');
   const [dynamicMinHeight, setDynamicMinHeight] = useState<number>(500);
-  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [starredMessageIds, setStarredMessageIds] = useState<string[]>([]);
   const [starredMessageSnapshots, setStarredMessageSnapshots] = useState<ChatMessageFromServer[]>([]);
   const [isSidebarVisible, setIsSidebarVisible] = useState(false);
@@ -395,7 +395,6 @@ export const Conversation: React.FC = () => {
   const pendingSidebarRestore = useRef(false);
   const chatShellRef = useRef<HTMLDivElement>(null);
   const initialLoadDone = useRef(false);
-  const justSentMessageRef = useRef(false);
   const spacerRef = useRef<HTMLDivElement>(null);
 
   const headerRef = useRef<HTMLElement>(null);
@@ -962,18 +961,10 @@ export const Conversation: React.FC = () => {
     ],
   );
 
-  const scrollToBottom = useCallback((smooth: boolean = true, force: boolean = false) => {
-    const el = mainScrollRef.current;
-    if (!el) return;
-    if (!force) return;
-
-    requestAnimationFrame(() => {
-      el.scrollTo({
-        top: el.scrollHeight,
-        behavior: smooth ? 'smooth' : 'auto',
-      });
-    });
-  }, []);
+  const { showLatest: showScrollToBottom, scrollToBottom, cancelFollowing } = useChatScrollControls(
+    mainScrollRef,
+    activeSidebarView === 'chat' && !isInitialLoading,
+  );
 
   useEffect(() => {
     if (!ENABLE_LEGACY_HISTORY_IMPORT) return;
@@ -1165,6 +1156,7 @@ export const Conversation: React.FC = () => {
   const handleJumpToMessage = useCallback(
     (starredMessage: ChatMessageFromServer) => {
       if (isJumpingRef.current) return;
+      cancelFollowing();
       const isAssistantStarred = starredMessage.content_type === 'assistant';
 
       const exactMessageId = asTrimmedString(starredMessage.message_id);
@@ -1187,7 +1179,12 @@ export const Conversation: React.FC = () => {
           if (!targetElement) return false;
 
           clearToasts('conversation');
-          targetElement.scrollIntoView({ block: 'start', behavior: 'smooth', inline: 'nearest' });
+          const scroller = mainScrollRef.current;
+          if (!scroller) return false;
+          scroller.scrollTo({
+            top: scroller.scrollTop + targetElement.getBoundingClientRect().top - scroller.getBoundingClientRect().top - 10,
+            behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+          });
           flashJumpTarget(targetId);
           suppressAutoLoadUntilRef.current = Date.now() + JUMP_STAY_PUT_MS;
           return true;
@@ -1386,6 +1383,7 @@ export const Conversation: React.FC = () => {
       clearToasts,
       findNearestMessageIdByTimestamp,
       findQuestionByUserContext,
+      cancelFollowing,
       flashJumpTarget,
       loadChatHistory,
       mergeMessagesIntoState,
@@ -1397,10 +1395,10 @@ export const Conversation: React.FC = () => {
 
   const handleScrollInternal = useCallback(
     (e: React.UIEvent<HTMLDivElement>) => {
-      const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+      const { scrollTop } = e.currentTarget;
       const currentFetchState = fetchStateRef.current;
 
-      if (!showDateSticky) setShowDateSticky(true);
+      setShowDateSticky(true);
       if (hideDateStickyTimeoutRef.current) clearTimeout(hideDateStickyTimeoutRef.current);
 
       hideDateStickyTimeoutRef.current = setTimeout(() => {
@@ -1414,10 +1412,6 @@ export const Conversation: React.FC = () => {
       lastScrollTopRef.current = currentScrollTop;
 
       if (scrollTimeoutRef2.current) clearTimeout(scrollTimeoutRef2.current);
-
-      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-      const isNotAtBottom = distanceFromBottom > 100;
-      setShowScrollToBottom(isNotAtBottom);
 
       if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
       setIsUserNearTop(scrollTop < SCROLL_THRESHOLD);
@@ -1440,7 +1434,6 @@ export const Conversation: React.FC = () => {
     [
       isInitialLoading,
       loadChatHistory,
-      showDateSticky,
     ],
   );
 
@@ -1508,7 +1501,6 @@ export const Conversation: React.FC = () => {
       if (!scroller || isJumpingRef.current) return;
       const saved = sidebarScrollPositions.current[activeSidebarView];
       scroller.scrollTop = saved?.atBottom ? scroller.scrollHeight : saved?.top ?? 0;
-      setShowScrollToBottom(scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight > 100);
     });
     return () => cancelAnimationFrame(frame);
   }, [activeSidebarView, handleTextareaResize]);
@@ -1758,13 +1750,6 @@ export const Conversation: React.FC = () => {
   }, [mergeGalleryItems, mergeMessagesIntoState, supabaseUserId]);
 
   useEffect(() => {
-    if (justSentMessageRef.current) {
-      scrollToBottom(true, true);
-      justSentMessageRef.current = false;
-    }
-  }, [chatMessages, scrollToBottom]);
-
-  useEffect(() => {
     return () => {
       currentAttachments.forEach((att) => att.previewUrl && URL.revokeObjectURL(att.previewUrl));
     };
@@ -1791,7 +1776,6 @@ export const Conversation: React.FC = () => {
     (e: React.FormEvent) => {
       e.preventDefault();
       if (!canSubmit) return;
-      justSentMessageRef.current = true;
       executeSubmission(message, currentAttachments);
     },
     [
@@ -1956,7 +1940,7 @@ export const Conversation: React.FC = () => {
 
         <main
           ref={mainScrollRef}
-          className="min-h-0 overflow-y-auto overflow-x-hidden w-full scroll-pt-2.5"
+          className="min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-none w-full scroll-pt-2.5"
           onScroll={isImagesView || isConnectorsView ? undefined : handleScroll}
         >
           <div
@@ -2016,10 +2000,12 @@ export const Conversation: React.FC = () => {
 
                   return (
                     <div key={dateKey} className="date-group relative w-full min-w-0">
-                      {dateHeader && showDateSticky && (
-                        <div className="sticky pt-2 z-20 flex justify-center my-3 top-0 pointer-events-none">
-                          <div className="bg-background text-primary text-xs px-4 py-1.5 rounded-full shadow-sm border border-primary/10">
-                            {dateHeader}
+                      {dateHeader && (
+                        <div className="sticky h-0 z-20 top-0 pointer-events-none" aria-hidden={!showDateSticky}>
+                          <div className={`absolute inset-x-0 top-2 flex justify-center transition-opacity duration-150 ${showDateSticky ? 'opacity-100' : 'opacity-0'}`}>
+                            <div className="bg-background text-primary text-xs px-4 py-1.5 rounded-full shadow-sm border border-primary/10">
+                              {dateHeader}
+                            </div>
                           </div>
                         </div>
                       )}
