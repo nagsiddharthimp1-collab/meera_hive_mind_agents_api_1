@@ -474,7 +474,7 @@ function SignInClient() {
                 Experience
               </p>
 
-              <h2 className="mt-8 max-w-3xl font-serif text-[clamp(2.8rem,6vw,5.25rem)] font-normal leading-[0.92] tracking-[-0.045em] sm:mt-10">
+              <h2 className="mt-8 max-w-3xl font-serif text-[clamp(2rem,6vw,5.25rem)] font-normal leading-[0.92] tracking-[-0.045em] sm:mt-10">
                 Conscious companionship.
               </h2>
 
@@ -521,7 +521,7 @@ function SignInClient() {
               Explore Labs
               <span aria-hidden="true" className="transition-transform duration-200 group-hover:translate-x-0.5 motion-reduce:transition-none">→</span>
             </Link>
-            <nav className="flex w-full flex-wrap items-center justify-center gap-x-6 gap-y-1 sm:col-span-2 sm:justify-end" aria-label="Legal">
+            <nav className="flex w-full flex-wrap items-center justify-center gap-x-3 gap-y-1 sm:col-span-2 sm:justify-end sm:gap-x-6" aria-label="Legal">
               <Link href="/pricing" className="inline-flex min-h-11 items-center transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
                 Pricing
               </Link>
