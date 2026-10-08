@@ -6,6 +6,7 @@ import {
   getAgentRouteUserMessage,
   isAgentCandidate,
   isContextualAgentCandidate,
+  isTypedApprovalCandidate,
   requestAgentRoute,
   waitForAgent,
 } from '@/lib/agenticRoute';
@@ -1066,6 +1067,13 @@ export const chatService = {
       /* ---------------------------------------------------------------------- */
 
       let agentCandidate = isAgentCandidate(message);
+      if (process.env.NEXT_PUBLIC_AGENTIC_TEXT_ENABLED === 'true' && !normalizedAttachments.length && isTypedApprovalCandidate(message)) {
+        const explicitDecision = /\b(?:approv(?:e|ed)|reject|decline)\b/i.test(message);
+        const { data: pendingAction } = await supabase.from('agent_tasks').select('id')
+          .eq('user_id', userId).eq('session_id', effectiveSessionId)
+          .eq('status', 'awaiting_approval').limit(1).maybeSingle();
+        agentCandidate = explicitDecision || Boolean(pendingAction) || agentCandidate;
+      }
       if (process.env.NEXT_PUBLIC_AGENTIC_TEXT_ENABLED === 'true' && !agentCandidate && !normalizedAttachments.length && message.length <= 240) {
         const { data: pendingQuestion } = await supabase.from('agent_tasks').select('id')
           .eq('user_id', userId).eq('session_id', effectiveSessionId)
@@ -1112,6 +1120,12 @@ export const chatService = {
             if (!signal?.aborted) console.error('Agent route failed', error);
             throw error;
           }
+        }
+        if (route?.reply) {
+          onDelta(route.reply);
+          onDone?.({ message_id: assistantMessageId, content_type: 'assistant', content: route.reply,
+            timestamp: new Date().toISOString(), attachments: [], is_call: false, failed: false, finish_reason: null });
+          return;
         }
         if (route?.executionMode === 'agentic' && route.taskId) {
           onMeta?.({ conversationClass: route.conversationClass, agenticActive: true, taskId: route.taskId, statusLabel: 'Planning the steps', model: 'meera-agent' });
