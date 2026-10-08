@@ -486,14 +486,14 @@ function SignInClient() {
                 <span>Image</span>
               </p>
 
-              <div className="mt-10 flex flex-col gap-7 border-t border-background/15 pt-6 sm:mt-12 sm:flex-row sm:items-center sm:justify-between sm:pt-7">
+              <div className="mt-10 flex flex-col gap-7 border-t border-background/15 pt-6 sm:mt-12 sm:pt-7 lg:flex-row lg:items-center lg:justify-between">
                 <p className="font-serif text-xl tracking-[-0.02em] text-background/72 sm:text-2xl">
                   7,850+ Minds <span className="mx-1.5 text-background/28">·</span> One Hive Mind
                 </p>
 
                 <button
                   onClick={handleGoogleSignIn}
-                  className="group flex h-12 w-full items-center justify-center rounded-full bg-background px-7 text-sm font-semibold text-primary transition-transform duration-300 hover:-translate-y-0.5 sm:w-48"
+                  className="group flex h-12 w-full shrink-0 items-center justify-center rounded-full bg-background px-7 text-sm font-semibold text-primary transition-transform duration-300 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-background focus-visible:ring-offset-4 focus-visible:ring-offset-primary sm:w-48"
                 >
                   Talk to Meera
                   <span className="ml-2 transition-transform duration-300 group-hover:translate-x-1" aria-hidden="true">
@@ -504,9 +504,9 @@ function SignInClient() {
             </div>
           </div>
 
-          <footer className="mx-auto mt-14 flex w-full max-w-6xl flex-col items-center justify-between gap-5 border-t border-primary/10 pt-7 text-xs text-primary/45 sm:mt-16 sm:flex-row">
-            <div className="inline-flex items-center gap-2">
-              <Image src="/icons/meera.svg" alt="" width={20} height={20} className="h-5 w-5" />
+          <footer className="mx-auto mt-14 grid w-full max-w-6xl items-center justify-items-center gap-x-8 gap-y-5 border-t border-primary/10 pt-7 text-xs text-primary/45 sm:mt-16 sm:grid-cols-[minmax(0,1fr)_auto] sm:justify-items-stretch">
+            <div className="flex min-w-0 items-center gap-2.5 text-center leading-6 sm:text-left">
+              <Image src="/icons/meera.svg" alt="" width={20} height={20} className="h-5 w-5 shrink-0" />
               <span>
                 Meera · Your personal companion · By{' '}
                 <Link href="/labs" className="underline decoration-primary/20 underline-offset-4 transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background">
@@ -514,20 +514,27 @@ function SignInClient() {
                 </Link>
               </span>
             </div>
-            <nav className="flex items-center gap-6" aria-label="Legal">
-              <Link href="/pricing" className="transition-colors hover:text-primary">
+            <Link
+              href="/labs"
+              className="group inline-flex min-h-11 items-center justify-center gap-2.5 justify-self-center rounded-full border border-primary/15 px-5 text-xs font-medium tracking-wide text-primary/75 transition-colors hover:border-primary/30 hover:bg-primary/[0.04] hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-4 focus-visible:ring-offset-[#f4ede3] sm:justify-self-end sm:text-sm"
+            >
+              Explore Labs
+              <span aria-hidden="true" className="transition-transform duration-200 group-hover:translate-x-0.5 motion-reduce:transition-none">→</span>
+            </Link>
+            <nav className="flex w-full flex-wrap items-center justify-center gap-x-6 gap-y-1 sm:col-span-2 sm:justify-end" aria-label="Legal">
+              <Link href="/pricing" className="inline-flex min-h-11 items-center transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
                 Pricing
               </Link>
-              <Link href="/whitepaper" className="transition-colors hover:text-primary">
+              <Link href="/whitepaper" className="inline-flex min-h-11 items-center transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
                 Whitepaper
               </Link>
-              <Link href="/terms" className="transition-colors hover:text-primary">
+              <Link href="/terms" className="inline-flex min-h-11 items-center transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
                 Terms
               </Link>
-              <Link href="/privacy" className="transition-colors hover:text-primary">
+              <Link href="/privacy" className="inline-flex min-h-11 items-center transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
                 Privacy
               </Link>
-              <Link href="/refund-policy" className="transition-colors hover:text-primary">
+              <Link href="/refund-policy" className="inline-flex min-h-11 items-center transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
                 Refunds
               </Link>
             </nav>
