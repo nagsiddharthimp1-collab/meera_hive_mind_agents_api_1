@@ -248,12 +248,15 @@ function SignInClient() {
               </span>
             </Link>
 
-            <a
-              href="#intelligence"
-              className="text-xs font-medium tracking-wide text-primary/55 transition-colors hover:text-primary sm:text-sm"
+            <Link
+              href="/labs"
+              className="group inline-flex min-h-11 items-center gap-2.5 rounded-full border border-primary/15 px-4 text-xs font-medium tracking-wide text-primary/75 transition-colors hover:border-primary/30 hover:bg-primary/[0.04] hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-4 focus-visible:ring-offset-background sm:px-5 sm:text-sm"
             >
-              About Meera
-            </a>
+              Explore Labs
+              <span aria-hidden="true" className="transition-transform duration-200 group-hover:translate-x-0.5 motion-reduce:transition-none">
+                →
+              </span>
+            </Link>
           </header>
 
           <div className="grid flex-1 items-center gap-8 pb-10 pt-3 sm:gap-12 sm:pb-14 lg:grid-cols-[46fr_54fr] lg:gap-12 lg:pb-16 lg:pt-0 xl:gap-20">
@@ -504,7 +507,12 @@ function SignInClient() {
           <footer className="mx-auto mt-14 flex w-full max-w-6xl flex-col items-center justify-between gap-5 border-t border-primary/10 pt-7 text-xs text-primary/45 sm:mt-16 sm:flex-row">
             <div className="inline-flex items-center gap-2">
               <Image src="/icons/meera.svg" alt="" width={20} height={20} className="h-5 w-5" />
-              <span>Meera · Your personal companion · By Meera Labs Inc.</span>
+              <span>
+                Meera · Your personal companion · By{' '}
+                <Link href="/labs" className="underline decoration-primary/20 underline-offset-4 transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background">
+                  Meera Labs Inc.
+                </Link>
+              </span>
             </div>
             <nav className="flex items-center gap-6" aria-label="Legal">
               <Link href="/pricing" className="transition-colors hover:text-primary">
