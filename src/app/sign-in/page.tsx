@@ -525,9 +525,9 @@ function SignInClient() {
               <Link href="/pricing" className="inline-flex min-h-11 items-center transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
                 Pricing
               </Link>
-              <Link href="/whitepaper" className="inline-flex min-h-11 items-center transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+              <a href="/whitepaper" className="inline-flex min-h-11 items-center transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
                 Whitepaper
-              </Link>
+              </a>
               <Link href="/terms" className="inline-flex min-h-11 items-center transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
                 Terms
               </Link>
