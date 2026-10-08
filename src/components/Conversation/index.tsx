@@ -26,7 +26,6 @@ import { useSession } from 'next-auth/react';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { FiArrowLeft, FiArrowUp, FiGlobe, FiMenu, FiPaperclip } from 'react-icons/fi';
 import { IoCallSharp } from 'react-icons/io5';
-import { MdKeyboardArrowDown } from 'react-icons/md';
 import { AttachmentInputArea, AttachmentInputAreaRef } from './AttachmentInputArea';
 import { AttachmentPreview } from './AttachmentPreview';
 import { CallSessionItem } from './CallSessionItem';
@@ -962,7 +961,7 @@ export const Conversation: React.FC = () => {
     ],
   );
 
-  const { showScrollToBottom, scrollToBottom } = useChatScrollControls(mainScrollRef, activeSidebarView === 'chat');
+  const { scrollToBottom } = useChatScrollControls(mainScrollRef, activeSidebarView === 'chat');
 
   useEffect(() => {
     if (!ENABLE_LEGACY_HISTORY_IMPORT) return;
@@ -1767,10 +1766,6 @@ export const Conversation: React.FC = () => {
     };
   }, []);
 
-  const handleScrollToBottomClick = useCallback(() => {
-    scrollToBottom(!window.matchMedia('(prefers-reduced-motion: reduce)').matches, true);
-  }, [scrollToBottom]);
-
   const handleFormSubmit = useCallback(
     (e: React.FormEvent) => {
       e.preventDefault();
@@ -2132,17 +2127,6 @@ export const Conversation: React.FC = () => {
           style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.5rem)' }}
         >
           <div className="relative">
-            {showScrollToBottom && (
-              <button
-                type="button"
-                onClick={handleScrollToBottomClick}
-                className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-card text-primary border border-primary/20 shadow-md hover:bg-background transition-colors"
-                aria-label="Back to latest"
-                title="Back to latest"
-              >
-                <MdKeyboardArrowDown size={24} />
-              </button>
-            )}
             <div className="absolute bottom_full left-0 right-0 flex flex-col items-center mb-2">
               {!isSubscriptionLoading &&
                 !isSubscriptionError &&
