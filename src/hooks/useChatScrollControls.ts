@@ -28,18 +28,18 @@ export function useChatScrollControls(ref: RefObject<HTMLDivElement>, active: bo
     navigationStarted.current = lastMovement.current = performance.now();
     previousTop.current = el.scrollTop;
     navigationFrame.current = requestAnimationFrame(() => {
-      const startingTop = el.scrollTop;
-      let hasMoved = false;
+      const targetTop = Math.max(0, el.scrollHeight - el.clientHeight);
       let fallbackStarted = 0;
       let fallbackTop = 0;
       const animated = smooth && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       el.scrollTo({ top: el.scrollHeight, behavior: animated ? 'smooth' : 'auto' });
       const settle = (now: number) => {
         if (!navigating.current) return;
-        hasMoved ||= Math.abs(el.scrollTop - startingTop) > 0.5;
-        // Some WebKit versions can ignore a native smooth-scroll request.
-        // Recover with a short animation only when navigation has never moved.
-        if (!hasMoved && now - navigationStarted.current > 180 && el.scrollHeight - el.clientHeight - el.scrollTop > 48) {
+        if (Math.abs(el.scrollTop - previousTop.current) > 0.5) lastMovement.current = now;
+        // Recover native navigation that stalls before reaching its requested target.
+        // Keep the original destination so reply growth doesn't start auto-following.
+        const destination = Math.min(targetTop, Math.max(0, el.scrollHeight - el.clientHeight));
+        if (now - navigationStarted.current > 180 && now - lastMovement.current > 120 && destination - el.scrollTop > 48) {
           if (!fallbackStarted) {
             fallbackStarted = now;
             fallbackTop = el.scrollTop;
@@ -47,7 +47,7 @@ export function useChatScrollControls(ref: RefObject<HTMLDivElement>, active: bo
         }
         if (fallbackStarted) {
           const progress = animated ? Math.min(1, (now - fallbackStarted) / 280) : 1;
-          el.scrollTop = fallbackTop + (el.scrollHeight - el.clientHeight - fallbackTop) * (1 - Math.pow(1 - progress, 3));
+          el.scrollTop = fallbackTop + (destination - fallbackTop) * (1 - Math.pow(1 - progress, 3));
           if (progress < 1) {
             navigationFrame.current = requestAnimationFrame(settle);
             return;
