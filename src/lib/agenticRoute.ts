@@ -52,7 +52,7 @@ export function isAgentCandidate(message: string): boolean {
     || /\b(?:unread|recent|latest|today(?:'s)?)\s+(?:e-?mails?|mails?|meetings?|appointments?)\b/i.test(value)
     || /\bwhat(?:'s| is)\b.{0,80}\b(?:on\s+)?my\s+(?:calendar|schedule|inbox)\b/i.test(value)
     || /\b(?:am i|are we|do i have)\b.{0,60}\b(?:free|available|meeting|appointment)\b/i.test(value);
-  const connectorWrite = /\b(?:send|reply|forward|compose|draft|write|prepare)\b.{0,160}\b(?:e-?mail|gmail|mail|message)\b|\b(?:create|add|book|schedule|reschedule|move|shift|postpone|bring\s+forward|push\s+back|update|edit|cancel|delete)\b.{0,140}\b(?:calendar|event|meeting|appointment)\b/i.test(value)
+  const connectorWrite = /\b(?:send|reply|forward|compose|draft|write|prepare)\b.{0,160}\b(?:e-?mail|gmail|mail|message)\b|\b(?:create|add|book|schedule|reschedule|move|update|edit|cancel|delete)\b.{0,140}\b(?:calendar|event|meeting|appointment)\b/i.test(value)
     || /\b(?:e-?mail|gmail|mail)\b.{0,100}\b(?:to|reply|forward)\b/i.test(value);
   const connector = !connectorSupportQuestion && !connectorCapabilityCopy && (connectorRead || connectorWrite);
   // Explicit website interaction belongs to Hermes even when the same request
@@ -81,13 +81,9 @@ export function isContextualAgentCandidate(message: string): boolean {
   const value = message.toLowerCase().replace(/\s+/g, ' ').trim();
   if (!value || value.length > 600) return false;
   return /\b(?:reply|respond|write back|send)\b.{0,220}\b(?:him|her|them|this|that|the|guy|person|candidate|sender|thread)\b|\b(?:reply|respond|write back)\s+(?:to\s+)?[\p{L}'’-]+\b/iu.test(value)
-    || /\b(?:schedule|reschedule|move|shift|postpone|bring\s+forward|push\s+back|update|edit|cancel|delete|add)\b.{0,180}\b(?:it|that|this|meeting|event|appointment)\b/i.test(value)
+    || /\b(?:schedule|reschedule|move|update|edit|cancel|delete|add)\b.{0,180}\b(?:it|that|this|meeting|event|appointment)\b/i.test(value)
     || /\b(?:buy|order|book|reserve|choose|pick|select|go with|take|get)\b.{0,180}\b(?:it|that|this|one|option|first|second|third|cheapest|best)\b|^(?:go ahead|do it|proceed|continue|yes,?\s+(?:do|book|buy|order|send)\s+it)[.!\s]*$/i.test(value)
     || /^(?:something|anything|another|make it|only|prefer|instead|how about|what about|in|near|around|for|check (?:the )?(?:net|web))\b|\b(?:healthier|healthy|homely|cheaper|closest|nearer|earlier|later|morning|evening|vegetarian|non-?veg|personal one|work one)\b/i.test(value);
-}
-
-export function isTypedApprovalCandidate(message: string): boolean {
-  return /^(?:approve(?:\s+(?:it|this|that|go\s+ahead))?|approved|yes[,\s]+(?:approve|go\s+ahead|do\s+it)|go\s+ahead|do\s+it|proceed|reject(?:\s+(?:it|this|that))?|decline|no[,\s]+(?:cancel|don['’]?t\s+do\s+it)|cancel\s+(?:it|this|that))[.!\s]*$/i.test(message.trim());
 }
 
 export async function requestAgentRoute(args: {
@@ -99,7 +95,7 @@ export async function requestAgentRoute(args: {
   userMessageId: string;
   assistantMessageId: string;
   signal?: AbortSignal;
-}): Promise<{ executionMode: 'answer' | 'agentic'; taskId?: string; conversationClass?: string; reply?: string }> {
+}): Promise<{ executionMode: 'answer' | 'agentic'; taskId?: string; conversationClass?: string }> {
   const body = JSON.stringify({ operation: 'route', message: args.message, sessionId: args.sessionId, userMessageId: args.userMessageId, assistantMessageId: args.assistantMessageId, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone });
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
@@ -123,7 +119,7 @@ export async function requestAgentRoute(args: {
           response.status,
         );
       }
-      return JSON.parse(raw) as { executionMode: 'answer' | 'agentic'; taskId?: string; conversationClass?: string; reply?: string };
+      return JSON.parse(raw) as { executionMode: 'answer' | 'agentic'; taskId?: string; conversationClass?: string };
     } catch (error) {
       const status = getAgentRouteErrorStatus(error);
       if (attempt === 1 || args.signal?.aborted || (status !== undefined && status < 500)) throw error;

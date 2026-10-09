@@ -10,7 +10,6 @@ import { Toast } from '@/components/ui/Toast';
 import { useToast } from '@/components/ui/ToastProvider';
 import { usePricingModal } from '@/contexts/PricingModalContext';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
-import { useChatScrollControls } from '@/hooks/useChatScrollControls';
 import { getChatViewportHeight, isTouchChatViewport, useChatViewport } from '@/hooks/useChatViewport';
 import { useDragAndDrop } from '@/hooks/useDragAndDrop';
 import { useMessageSubmission } from '@/hooks/useMessageSubmission';
@@ -26,6 +25,7 @@ import { useSession } from 'next-auth/react';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { FiArrowLeft, FiArrowUp, FiGlobe, FiMenu, FiPaperclip } from 'react-icons/fi';
 import { IoCallSharp } from 'react-icons/io5';
+import { MdKeyboardArrowDown } from 'react-icons/md';
 import { AttachmentInputArea, AttachmentInputAreaRef } from './AttachmentInputArea';
 import { AttachmentPreview } from './AttachmentPreview';
 import { CallSessionItem } from './CallSessionItem';
@@ -346,6 +346,7 @@ export const Conversation: React.FC = () => {
   const [isSearchActive, setIsSearchActive] = useState(true);
   const [currentThoughtText, setCurrentThoughtText] = useState('');
   const [dynamicMinHeight, setDynamicMinHeight] = useState<number>(500);
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [starredMessageIds, setStarredMessageIds] = useState<string[]>([]);
   const [starredMessageSnapshots, setStarredMessageSnapshots] = useState<ChatMessageFromServer[]>([]);
   const [isSidebarVisible, setIsSidebarVisible] = useState(false);
@@ -961,7 +962,18 @@ export const Conversation: React.FC = () => {
     ],
   );
 
-  const { scrollToBottom } = useChatScrollControls(mainScrollRef, activeSidebarView === 'chat');
+  const scrollToBottom = useCallback((smooth: boolean = true, force: boolean = false) => {
+    const el = mainScrollRef.current;
+    if (!el) return;
+    if (!force) return;
+
+    requestAnimationFrame(() => {
+      el.scrollTo({
+        top: el.scrollHeight,
+        behavior: smooth ? 'smooth' : 'auto',
+      });
+    });
+  }, []);
 
   useEffect(() => {
     if (!ENABLE_LEGACY_HISTORY_IMPORT) return;
@@ -1385,7 +1397,7 @@ export const Conversation: React.FC = () => {
 
   const handleScrollInternal = useCallback(
     (e: React.UIEvent<HTMLDivElement>) => {
-      const { scrollTop } = e.currentTarget;
+      const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
       const currentFetchState = fetchStateRef.current;
 
       if (!showDateSticky) setShowDateSticky(true);
@@ -1402,6 +1414,10 @@ export const Conversation: React.FC = () => {
       lastScrollTopRef.current = currentScrollTop;
 
       if (scrollTimeoutRef2.current) clearTimeout(scrollTimeoutRef2.current);
+
+      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+      const isNotAtBottom = distanceFromBottom > 100;
+      setShowScrollToBottom(isNotAtBottom);
 
       if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
       setIsUserNearTop(scrollTop < SCROLL_THRESHOLD);
@@ -1492,6 +1508,7 @@ export const Conversation: React.FC = () => {
       if (!scroller || isJumpingRef.current) return;
       const saved = sidebarScrollPositions.current[activeSidebarView];
       scroller.scrollTop = saved?.atBottom ? scroller.scrollHeight : saved?.top ?? 0;
+      setShowScrollToBottom(scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight > 100);
     });
     return () => cancelAnimationFrame(frame);
   }, [activeSidebarView, handleTextareaResize]);
@@ -1765,6 +1782,10 @@ export const Conversation: React.FC = () => {
       requestCache.current.clear();
     };
   }, []);
+
+  const handleScrollToBottomClick = useCallback(() => {
+    scrollToBottom(!window.matchMedia('(prefers-reduced-motion: reduce)').matches, true);
+  }, [scrollToBottom]);
 
   const handleFormSubmit = useCallback(
     (e: React.FormEvent) => {
@@ -2127,6 +2148,17 @@ export const Conversation: React.FC = () => {
           style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.5rem)' }}
         >
           <div className="relative">
+            {showScrollToBottom && (
+              <button
+                type="button"
+                onClick={handleScrollToBottomClick}
+                className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-card text-primary border border-primary/20 shadow-md hover:bg-background transition-colors"
+                aria-label="Back to latest"
+                title="Back to latest"
+              >
+                <MdKeyboardArrowDown size={24} />
+              </button>
+            )}
             <div className="absolute bottom_full left-0 right-0 flex flex-col items-center mb-2">
               {!isSubscriptionLoading &&
                 !isSubscriptionError &&

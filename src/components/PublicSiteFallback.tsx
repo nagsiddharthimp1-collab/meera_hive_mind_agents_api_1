@@ -15,7 +15,6 @@ export function PublicSiteFallback() {
           <Link href="/pricing" className="rounded-full border border-primary/30 px-6 py-3 font-semibold">View plans</Link>
         </div>
         <nav aria-label="Business and legal information" className="mt-14 flex flex-wrap gap-5 border-t border-primary/15 pt-6 text-sm">
-          <Link href="/labs" className="underline underline-offset-4">Meera Labs</Link>
           <Link href="/pricing" className="underline underline-offset-4">Pricing</Link>
           <Link href="/terms" className="underline underline-offset-4">Terms</Link>
           <Link href="/privacy" className="underline underline-offset-4">Privacy</Link>

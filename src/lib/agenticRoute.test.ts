@@ -136,15 +136,3 @@ test('turns route failures into durable user-facing messages', () => {
     'I could not reach the agent service. Please retry.',
   );
 });
-
-test('calendar changes reach both candidate gates', () => {
-  for(const text of ['shift todays meeting to tomorrow 5:30 PM','postpone the appointment until Friday','bring forward this event to 2 PM','push back my meeting by an hour']) {
-    assert.equal(isAgentCandidate(text),true,text);
-    assert.equal(isContextualAgentCandidate(text),true,text);
-  }
-});
-test('typed approval candidates exclude conditional consent and changes', async () => {
-  const {isTypedApprovalCandidate}=await import('./agenticRoute.ts');
-  for(const text of ['approve go ahead','Approve it!','yes, do it','reject it','go ahead']) assert.equal(isTypedApprovalCandidate(text),true,text);
-  for(const text of ["don't approve",'approve but change it to 6 PM','how do I approve?','you can check now']) assert.equal(isTypedApprovalCandidate(text),false,text);
-});

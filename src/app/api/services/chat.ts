@@ -1,13 +1,11 @@
 // src/app/api/services/chat.ts
 import { streamMeera } from '@/lib/streamMeera';
-import { normalizeMessageTimestamp } from '@/lib/messageTimestamp';
 import {
   AgentRouteError,
   getAgentRouteErrorStatus,
   getAgentRouteUserMessage,
   isAgentCandidate,
   isContextualAgentCandidate,
-  isTypedApprovalCandidate,
   requestAgentRoute,
   waitForAgent,
 } from '@/lib/agenticRoute';
@@ -63,7 +61,7 @@ type DbMessageRow = {
   user_id: string;
   content_type: string;
   content: string;
-  timestamp: string | null;
+  timestamp: string;
   session_id?: string | null;
   is_call?: boolean | null;
   model?: string | null;
@@ -394,7 +392,7 @@ function mapDbRowToChatMessage(row: DbMessageRow) {
     message_id: row.message_id,
     content_type: row.content_type === 'assistant' ? 'assistant' : 'user',
     content: row.content,
-    timestamp: normalizeMessageTimestamp(row.timestamp),
+    timestamp: row.timestamp,
     session_id: row.session_id || undefined,
     is_call: row.is_call ?? false,
     attachments: (row.attachments as ImageAttachment[] | null) ?? [],
@@ -557,7 +555,7 @@ export const chatService = {
         message_id: row.message_id,
         content_type: 'assistant' as const,
         content: row.content ?? '',
-        timestamp: normalizeMessageTimestamp(row.timestamp),
+        timestamp: row.timestamp,
         session_id: row.session_id || undefined,
         is_call: row.is_call ?? false,
         attachments:
@@ -623,7 +621,6 @@ export const chatService = {
 
       if (anchor) {
         anchorRow = anchor as DbMessageRow;
-        if (!anchorRow.timestamp) return { message: 'not_found', data: [] };
         anchorTimestamp = anchorRow.timestamp;
       } else if (normalizedTimestamp) {
         const parsedTimestamp = new Date(normalizedTimestamp).getTime();
@@ -1069,13 +1066,6 @@ export const chatService = {
       /* ---------------------------------------------------------------------- */
 
       let agentCandidate = isAgentCandidate(message);
-      if (process.env.NEXT_PUBLIC_AGENTIC_TEXT_ENABLED === 'true' && !normalizedAttachments.length && isTypedApprovalCandidate(message)) {
-        const explicitDecision = /\b(?:approv(?:e|ed)|reject|decline)\b/i.test(message);
-        const { data: pendingAction } = await supabase.from('agent_tasks').select('id')
-          .eq('user_id', userId).eq('session_id', effectiveSessionId)
-          .eq('status', 'awaiting_approval').limit(1).maybeSingle();
-        agentCandidate = explicitDecision || Boolean(pendingAction) || agentCandidate;
-      }
       if (process.env.NEXT_PUBLIC_AGENTIC_TEXT_ENABLED === 'true' && !agentCandidate && !normalizedAttachments.length && message.length <= 240) {
         const { data: pendingQuestion } = await supabase.from('agent_tasks').select('id')
           .eq('user_id', userId).eq('session_id', effectiveSessionId)
@@ -1122,12 +1112,6 @@ export const chatService = {
             if (!signal?.aborted) console.error('Agent route failed', error);
             throw error;
           }
-        }
-        if (route?.reply) {
-          onDelta(route.reply);
-          onDone?.({ message_id: assistantMessageId, content_type: 'assistant', content: route.reply,
-            timestamp: new Date().toISOString(), attachments: [], is_call: false, failed: false, finish_reason: null });
-          return;
         }
         if (route?.executionMode === 'agentic' && route.taskId) {
           onMeta?.({ conversationClass: route.conversationClass, agenticActive: true, taskId: route.taskId, statusLabel: 'Planning the steps', model: 'meera-agent' });
