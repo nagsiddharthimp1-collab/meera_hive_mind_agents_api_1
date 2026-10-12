@@ -1,7 +1,7 @@
 'use client';
 
-import { supabase } from '@/lib/supabaseClient';
 import GrowthDashboard from '@/components/analytics/GrowthDashboard';
+import { supabase } from '@/lib/supabaseClient';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -239,7 +239,11 @@ function formatDateTime(value: string | null): string {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
   return parsed.toLocaleString('en-IN', {
-    year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit',
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
   });
 }
 
@@ -274,7 +278,9 @@ export default function AnalyticsPage() {
   const [stageError, setStageError] = useState<string>('');
   const [stageData, setStageData] = useState<FunnelUsersResponse | null>(null);
   const [stageSearch, setStageSearch] = useState<string>('');
-  const [conversationUser, setConversationUser] = useState<FunnelUserRow | null>(null);
+  const [conversationUser, setConversationUser] = useState<Pick<FunnelUserRow, 'user_id' | 'name' | 'email'> | null>(
+    null,
+  );
   const [conversationReason, setConversationReason] = useState<string>('Product and growth review');
   const [conversationData, setConversationData] = useState<ConversationResponse | null>(null);
   const [conversationLoading, setConversationLoading] = useState<boolean>(false);
@@ -499,7 +505,6 @@ export default function AnalyticsPage() {
     to,
   ]);
 
-
   useEffect(() => {
     if (!needsStageUsers || !selectedStage || !accessToken) {
       setStageLoading(false);
@@ -642,7 +647,7 @@ export default function AnalyticsPage() {
     currentView,
   ]);
 
-  const openConversations = (user: FunnelUserRow) => {
+  const openConversations = (user: Pick<FunnelUserRow, 'user_id' | 'name' | 'email'>) => {
     setConversationUser(user);
     setConversationData(null);
     setConversationError('');
@@ -1090,7 +1095,17 @@ export default function AnalyticsPage() {
               </div>
             )}
 
-            {currentView === 'home' && <GrowthDashboard token={accessToken} permissions={accessProfile?.permissions ?? []} />}
+            {currentView === 'home' && (
+              <GrowthDashboard
+                token={accessToken}
+                permissions={accessProfile?.permissions ?? []}
+                onReviewUser={
+                  canViewConversations
+                    ? (user) => openConversations({ user_id: user.id, name: user.name, email: user.email })
+                    : undefined
+                }
+              />
+            )}
 
             {currentView === 'team-access' && canManageAccess && (
               <div

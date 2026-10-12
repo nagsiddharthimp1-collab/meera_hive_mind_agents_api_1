@@ -19,10 +19,14 @@ await context.addInitScript(({storageKey})=>{
  const enc=o=>btoa(JSON.stringify(o));const user={id:'00000000-0000-4000-8000-000000000001',aud:'authenticated',role:'authenticated',email:'analytics-fixture@himeera.com',app_metadata:{provider:'email'},user_metadata:{},created_at:'2026-01-01T00:00:00Z'};
  localStorage.setItem(storageKey,JSON.stringify({access_token:enc({alg:'HS256',typ:'JWT'})+'.'+enc({exp:4102444800,sub:user.id,role:'authenticated'})+'.test',refresh_token:'test-only',expires_at:4102444800,expires_in:3600,token_type:'bearer',user}));
 },{storageKey});
-let failProduct=false,failAi=false,calls=[],oldSummaryCalls=0;
+let failProduct=false,failAi=false,calls=[],oldSummaryCalls=0,reviewAllowed=true,reviewCalls=[];
 await context.route('**/*',async route=>{
  const url=new URL(route.request().url());
- if(url.pathname==='/api/analytics/me')return route.fulfill({json:{email:'analytics-fixture@himeera.com',role:'analyst',permissions:['analytics.view','users.list','users.view_pii','growth_links.view']}});
+ if(url.pathname==='/api/analytics/me')return route.fulfill({json:{email:'analytics-fixture@himeera.com',role:'analyst',permissions:['analytics.view','users.list','users.view_pii','growth_links.view',...(reviewAllowed?['conversations.view_metadata','conversations.view_redacted']:[])]}});
+ if(url.pathname==='/api/analytics/conversations'){
+  reviewCalls.push(Object.fromEntries(url.searchParams));
+  return route.fulfill({json:{access_mode:'redacted',messages:[{message_id:'test-user',content_type:'user',content:'Fixture customer question',timestamp:'2026-10-08T10:00:00Z'},{message_id:'test-assistant',content_type:'assistant',content:'Fixture assistant reply',timestamp:'2026-10-08T10:01:00Z'}],truncated:false}});
+ }
  if(url.pathname==='/api/analytics/dashboard'){
   calls.push(url.searchParams.toString());
   if(failProduct)return route.fulfill({status:503,json:{error:'Product analytics temporarily unavailable.'}});
@@ -58,6 +62,19 @@ await page.getByRole('heading',{name:'Engaged new users · 10+ messages',exact:t
 await page.locator('[aria-label="Filtered users"] tbody tr').first().waitFor();
 check(calls.some(s=>s.includes('segment=engaged-new')),'engaged new users drilldown uses the 10-message segment');
 check(fixture.users.users.filter(u=>matchesSegment(u,'engaged-new')).length===fixture.dashboard.metrics.engagedNewUsers.value,'engaged user count matches headline');
+const reviewedUser=fixture.users.users.filter(u=>matchesSegment(u,'engaged-new'))[0];
+await page.locator('[aria-label="Filtered users"]').getByRole('button',{name:`Review chats for ${reviewedUser.email}`,exact:true}).click();
+const review=page.getByRole('dialog');
+check(await review.innerText().then(t=>t.includes(reviewedUser.email)),'existing reader identifies selected user by email');
+check(reviewCalls.length===0,'opening review dialog does not fetch conversations');
+await review.getByLabel('Review reason').fill('  ');
+check(await review.getByRole('button',{name:'Open audited chat'}).isDisabled(),'review requires business reason');
+await review.getByLabel('Review reason').fill('Check new-user onboarding');
+await review.getByRole('button',{name:'Open audited chat'}).click();
+await review.getByText('Fixture customer question',{exact:true}).waitFor();
+check(await review.getByText('Fixture assistant reply',{exact:true}).isVisible(),'existing reader renders user and assistant messages');
+check(reviewCalls.length===1&&reviewCalls[0].userId===reviewedUser.id&&reviewCalls[0].reason==='Check new-user onboarding','review submits canonical user ID and explicit reason to existing audited endpoint');
+await review.getByRole('button',{name:'Close',exact:true}).click();
 await page.getByRole('button',{name:'Close breakdown'}).click();
 check(await cards.filter({hasText:'Avg. messages / new user'}).innerText().then(t=>t.includes('3.4')),'new-user message average renders');
 await cards.filter({hasText:'Payment opened'}).getByRole('button').click();
@@ -101,4 +118,10 @@ for(const width of [1440,1024,768,550,390,320]){
  if(width===390||width===320)await page.screenshot({path:`verification/analytics-dashboard-mobile-${width}.png`,fullPage:true});
 }
 check(errors.length===0,'no browser runtime errors');
+reviewAllowed=false;
+await page.reload({waitUntil:'domcontentloaded'});
+await page.getByText('40',{exact:true}).first().waitFor();
+await page.locator('#snapshot article').filter({hasText:'Engaged new users'}).getByRole('button').click();
+await page.locator('[aria-label="Filtered users"] tbody tr').first().waitFor();
+check(await page.locator('[aria-label="Filtered users"]').getByRole('button',{name:/Review chats for/}).count()===0,'users without conversation permission have no review action');
 console.log(JSON.stringify({errors,oldSummaryCalls,requests:calls.length}));await browser.close();

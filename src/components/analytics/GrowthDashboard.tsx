@@ -346,6 +346,7 @@ function UserExplorer({
   segment,
   source,
   onClose,
+  onReview,
 }: {
   token: string;
   from: string;
@@ -353,6 +354,7 @@ function UserExplorer({
   segment: string;
   source: string;
   onClose: () => void;
+  onReview?: (user: DashboardUser) => void;
 }) {
   const [search, setSearch] = useState(''),
     [query, setQuery] = useState(''),
@@ -435,6 +437,7 @@ function UserExplorer({
                       {h}
                     </th>
                   ))}
+                  {onReview && <th scope="col">Conversation</th>}
                 </tr>
               </thead>
               <tbody>
@@ -450,11 +453,22 @@ function UserExplorer({
                     <td>{integer(u.activeDays)}</td>
                     <td>{u.paid === null ? '—' : u.paid ? 'Yes' : 'No'}</td>
                     <td>{u.lastActive ? dateLabel(u.lastActive) : '—'}</td>
+                    {onReview && (
+                      <td>
+                        <button
+                          className={styles.button}
+                          onClick={() => onReview(u)}
+                          aria-label={`Review chats for ${u.email || u.name || u.id}`}
+                        >
+                          Review chats
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
                 {!data?.users.length && (
                   <tr>
-                    <td colSpan={7}>No users match these filters.</td>
+                    <td colSpan={onReview ? 8 : 7}>No users match these filters.</td>
                   </tr>
                 )}
               </tbody>
@@ -477,7 +491,15 @@ function UserExplorer({
   );
 }
 
-export default function GrowthDashboard({ token, permissions }: { token: string; permissions: string[] }) {
+export default function GrowthDashboard({
+  token,
+  permissions,
+  onReviewUser,
+}: {
+  token: string;
+  permissions: string[];
+  onReviewUser?: (user: DashboardUser) => void;
+}) {
   const [window, setWindow] = useState({ from: daysAgo(29), to: today() });
   const [draft, setDraft] = useState(window),
     [range, setRange] = useState('30'),
@@ -905,6 +927,7 @@ export default function GrowthDashboard({ token, permissions }: { token: string;
             segment={segment.key}
             source={segment.source}
             onClose={() => setSegment(null)}
+            onReview={permissions.includes('conversations.view_metadata') ? onReviewUser : undefined}
           />
         )}
       </Section>
