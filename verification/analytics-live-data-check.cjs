@@ -17,4 +17,5 @@ const s=createClient(env.SUPABASE_URL||env.NEXT_PUBLIC_SUPABASE_URL,env.SUPABASE
  const publicUsers=details.map((u,i)=>({...u,id:'fixture-'+i,name:'Fixture user '+i,email:'fixture-'+i+'@example.test'}));
  fs.writeFileSync('verification/analytics-real-fixtures.json',JSON.stringify({dashboard,ai,users:{users:publicUsers,total:details.length}},null,2));
  console.log(JSON.stringify({passed:true,durationMs:Date.now()-start,metrics:dashboard.metrics,ai:ai.current,cohorts:dashboard.retention.length,channels:dashboard.channels.length}));
+ for(const range of [['2026-10-12','today'],['2026-10-06','7 days'],['2026-07-15','90 days'],['2025-11-15','lifetime']]){const started=Date.now();const [p,a]=await Promise.all([loadDashboard(s,range[0],to),loadAi(s,range[0],to)]);if(p.daily.reduce((s,d)=>s+d.messages,0)!==p.metrics.messages.value||a.daily.reduce((s,d)=>s+d.requests,0)!==a.current.requests)throw Error('Range totals mismatch');console.log(JSON.stringify({range:range[1],durationMs:Date.now()-started,users:p.metrics.totalUsers.value,active:p.metrics.activeUsers.value,requests:a.current.requests}));}
 })().catch(e=>{console.error(e.message);process.exitCode=1});
