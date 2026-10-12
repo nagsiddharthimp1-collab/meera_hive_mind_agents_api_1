@@ -389,7 +389,10 @@ function UserExplorer({
         <div>
           <span className={styles.eyebrow}>User explorer</span>
           <h3>
-            {segment.charAt(0).toUpperCase() + segment.slice(1)} users{source ? ` · ${source}` : ''}
+            {segment === 'engaged-new'
+              ? 'Engaged new users · 10+ messages'
+              : `${segment.charAt(0).toUpperCase() + segment.slice(1)} users`}
+            {source ? ` · ${source}` : ''}
           </h3>
           <p>
             {from} → {to} · UTC
@@ -579,22 +582,22 @@ export default function GrowthDashboard({ token, permissions }: { token: string;
       segment: 'new',
     },
     {
-      label: 'Active users',
-      key: 'activeUsers',
-      definition: 'Distinct users who sent at least one message in this window.',
-      segment: 'active',
-    },
-    {
-      label: 'Returning users',
-      key: 'returningUsers',
-      definition: 'Active users who signed up before this window.',
-      segment: 'returning',
+      label: 'Engaged new users',
+      key: 'engagedNewUsers',
+      definition: 'New signups who sent 10+ messages in this window.',
+      segment: 'engaged-new',
     },
     {
       label: 'Avg. messages / new user',
       key: 'newUserMessages',
       definition: 'Messages sent in this window by new signups ÷ all new signups, including those with zero messages.',
       segment: 'new',
+    },
+    {
+      label: 'Returning users',
+      key: 'returningUsers',
+      definition: 'Active users who signed up before this window.',
+      segment: 'returning',
     },
     {
       label: 'Payment opened',
@@ -757,6 +760,16 @@ export default function GrowthDashboard({ token, permissions }: { token: string;
                 {m.segment && canExplore && d && <small>↗</small>}
               </button>
               <Change metric={d?.metrics[m.key]} rate={m.rate} />
+              {m.key === 'engagedNewUsers' && !product.loading && d && (
+                <p className={styles.kpiDefinition}>
+                  {percent(
+                    d.metrics.engagedNewUsers.value !== null && d.metrics.newUsers.value
+                      ? d.metrics.engagedNewUsers.value / d.metrics.newUsers.value
+                      : null,
+                  )}{' '}
+                  of new signups
+                </p>
+              )}
               <p className={styles.kpiDefinition}>{m.definition}</p>
             </article>
           ))}

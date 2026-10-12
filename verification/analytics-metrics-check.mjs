@@ -32,6 +32,36 @@ const input = {
 const d = aggregateDashboard(input, '2026-09-01', '2026-09-10');
 assert.equal(d.metrics.totalUsers.value, 3);
 assert.equal(d.metrics.newUsers.value, 2);
+assert.equal(d.metrics.engagedNewUsers.value, 0);
+const engagement = aggregateDashboard(
+  {
+    ...input,
+    users: [
+      ...users,
+      { id: 'prior', created_at: '2026-08-25' },
+      { id: 'eleven', created_at: '2026-09-04' },
+      { id: 'idle', created_at: '2026-09-06' },
+    ],
+    messages: [
+      { user_id: 'auth-a', timestamp: '2026-09-02', content_type: 'user', count: 10 },
+      { user_id: 'new-b', timestamp: '2026-09-05', content_type: 'user', count: 9 },
+      { user_id: 'eleven', timestamp: '2026-09-05', content_type: 'user', count: 11 },
+      { user_id: 'old', timestamp: '2026-09-05', content_type: 'user', count: 100 },
+      { user_id: 'prior', timestamp: '2026-08-26', content_type: 'user', count: 10 },
+      { user_id: 'new-b', timestamp: '2026-09-11', content_type: 'user', count: 100 },
+      { user_id: 'new-b', timestamp: '2026-09-05', content_type: 'assistant', count: 100 },
+    ],
+  },
+  '2026-09-01',
+  '2026-09-10',
+);
+assert.equal(engagement.metrics.engagedNewUsers.value, 2);
+assert.equal(engagement.metrics.engagedNewUsers.previous, 1);
+assert.equal(engagement.metrics.engagedNewUsers.value / engagement.metrics.newUsers.value, 0.5);
+assert.deepEqual(
+  engagement.details.filter((u) => matchesSegment(u, 'engaged-new')).map((u) => u.id),
+  ['new-a', 'eleven'],
+);
 assert.equal(d.metrics.activeUsers.value, 3);
 assert.equal(d.metrics.returningUsers.value, 1);
 assert.equal(d.metrics.messages.value, 11);
@@ -101,6 +131,7 @@ assert.equal(d.details.filter((u) => matchesSegment(u, 'returning')).length, 1);
 assert.equal(d.details.filter((u) => matchesSegment(u, 'free')).length, 1);
 const missing = aggregateDashboard({ ...input, messages: null, payments: null }, '2026-09-01', '2026-09-10');
 assert.equal(missing.metrics.activeUsers.value, null);
+assert.equal(missing.metrics.engagedNewUsers.value, null);
 assert.equal(missing.metrics.revenue.value, null);
 assert.equal(missing.metrics.newUsers.value, 2);
 assert.equal(missing.metrics.newUserMessages.value, null);
@@ -110,6 +141,7 @@ assert.equal(
 );
 const zero = aggregateDashboard({ ...input, messages: [], payments: [] }, '2026-09-01', '2026-09-10');
 assert.equal(zero.metrics.activeUsers.value, 0);
+assert.equal(zero.metrics.engagedNewUsers.value, 0);
 assert.equal(zero.metrics.revenue.value, 0);
 assert.equal(zero.messagesPerActive, null);
 assert.equal(zero.metrics.activation.value, 0);

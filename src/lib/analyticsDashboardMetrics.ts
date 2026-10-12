@@ -1,6 +1,7 @@
 // Shared, deterministic metric definitions. All dashboard calendar boundaries are UTC.
 export type Row = Record<string, unknown>;
 export const DAY = 86_400_000;
+export const ENGAGED_NEW_MESSAGES = 10;
 export const day = (value: unknown) => String(value ?? '').slice(0, 10);
 export const timestamp = (value: unknown) => Date.parse(String(value ?? ''));
 export const numeric = (value: unknown) => (Number.isFinite(Number(value)) ? Number(value) : 0);
@@ -143,6 +144,11 @@ export function aggregateDashboard(input: DashboardInput, from: string, to: stri
         : null,
     },
     newUsers: kpi(newUsers.length, previousUsers.length),
+    engagedNewUsers: kpi(
+      newUsers.filter((u) => (currentActivity.get(String(u.id))?.count ?? 0) >= ENGAGED_NEW_MESSAGES).length,
+      previousUsers.filter((u) => (previousActivity.get(String(u.id))?.count ?? 0) >= ENGAGED_NEW_MESSAGES).length,
+      !!input.messages,
+    ),
     activeUsers: kpi(currentActivity.size, previousActivity.size, !!input.messages),
     returningUsers: kpi(
       details.filter((u) => !u.isNew && (u.messages ?? 0) > 0).length,
@@ -338,6 +344,8 @@ export function matchesSegment(u: DashboardUser, segment: string) {
       return u.isNew && u.messages !== null && u.messages > 0;
     case 'engaged':
       return u.isNew && u.messages !== null && u.messages >= 5;
+    case 'engaged-new':
+      return u.isNew && u.messages !== null && u.messages >= ENGAGED_NEW_MESSAGES;
     case 'repeat':
       return u.isNew && u.messages !== null && u.messages >= 5 && u.activeDays !== null && u.activeDays >= 2;
     case 'returning':

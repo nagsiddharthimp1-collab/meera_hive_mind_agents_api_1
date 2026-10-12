@@ -27,6 +27,7 @@ export async function GET(request: NextRequest) {
           'free',
           'activated',
           'engaged',
+          'engaged-new',
           'repeat',
           'opened',
         ].includes(segment)
