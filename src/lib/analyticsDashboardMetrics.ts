@@ -123,6 +123,25 @@ export function aggregateDashboard(input: DashboardInput, from: string, to: stri
   );
   const metrics = {
     totalUsers: kpi(users.length, users.filter((u) => timestamp(u.created_at) < start).length),
+    paymentOpened: kpi(
+      currentOpened.size,
+      new Set(opened.filter((e) => inWindow(e.created_at, previousStart, start)).map((e) => canonical(e.user_id))).size,
+      !!input.events,
+    ),
+    newUserMessages: {
+      value: input.messages
+        ? ratio(
+            newUsers.reduce((sum, u) => sum + (currentActivity.get(String(u.id))?.count ?? 0), 0),
+            newUsers.length,
+          )
+        : null,
+      previous: input.messages
+        ? ratio(
+            previousUsers.reduce((sum, u) => sum + (previousActivity.get(String(u.id))?.count ?? 0), 0),
+            previousUsers.length,
+          )
+        : null,
+    },
     newUsers: kpi(newUsers.length, previousUsers.length),
     activeUsers: kpi(currentActivity.size, previousActivity.size, !!input.messages),
     returningUsers: kpi(
@@ -327,6 +346,8 @@ export function matchesSegment(u: DashboardUser, segment: string) {
       return u.messages === 0;
     case 'paid':
       return u.paid === true;
+    case 'opened':
+      return u.opened === true;
     case 'free':
       return u.paid === false;
     default:

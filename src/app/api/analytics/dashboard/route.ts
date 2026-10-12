@@ -28,6 +28,7 @@ export async function GET(request: NextRequest) {
           'activated',
           'engaged',
           'repeat',
+          'opened',
         ].includes(segment)
       )
         return NextResponse.json({ error: 'Unknown user segment.' }, { status: 400 });

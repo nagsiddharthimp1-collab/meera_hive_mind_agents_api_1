@@ -591,12 +591,16 @@ export default function GrowthDashboard({ token, permissions }: { token: string;
       segment: 'returning',
     },
     {
-      label: 'New-user activation',
-      key: 'activation',
-      format: percent,
-      rate: true,
-      definition: 'New signups who sent a message ÷ all new signups.',
-      segment: 'activated',
+      label: 'Avg. messages / new user',
+      key: 'newUserMessages',
+      definition: 'Messages sent in this window by new signups ÷ all new signups, including those with zero messages.',
+      segment: 'new',
+    },
+    {
+      label: 'Payment opened',
+      key: 'paymentOpened',
+      definition: 'Distinct users who opened the payment page in this window, including new and existing users.',
+      segment: 'opened',
     },
     {
       label: 'Paying customers',
@@ -608,13 +612,6 @@ export default function GrowthDashboard({ token, permissions }: { token: string;
       key: 'revenue',
       format: inr,
       definition: 'Successful positive payments dated in this window. INR; BYPASS excluded.',
-    },
-    {
-      label: 'Signup → paid',
-      key: 'paidConversion',
-      format: percent,
-      rate: true,
-      definition: 'New signups who paid in this window ÷ all new signups.',
     },
   ];
   return (
@@ -726,7 +723,7 @@ export default function GrowthDashboard({ token, permissions }: { token: string;
         id="snapshot"
         number="01"
         title="The business, at a glance"
-        subtitle="Customer growth and value creation. Every comparison uses the preceding window of equal length."
+        subtitle="Follow acquisition → engagement → monetization. Every comparison uses the preceding window of equal length."
       >
         <div className={styles.kpis} aria-busy={product.loading}>
           {metrics.map((m, i) => (
@@ -736,6 +733,9 @@ export default function GrowthDashboard({ token, permissions }: { token: string;
               title={m.definition}
               style={{ '--accent': palette[i % palette.length] } as React.CSSProperties}
             >
+              <div className={styles.eyebrow}>
+                {i < 2 ? '01 · Acquisition' : i < 5 ? '02 · Engagement' : '03 · Monetization'}
+              </div>
               <div className={styles.kpiLabel}>
                 {m.label}
                 <span title={m.definition} aria-label={m.definition}>
