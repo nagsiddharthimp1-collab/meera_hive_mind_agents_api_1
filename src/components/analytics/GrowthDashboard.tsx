@@ -594,12 +594,6 @@ export default function GrowthDashboard({ token, permissions }: { token: string;
       segment: 'new',
     },
     {
-      label: 'Returning users',
-      key: 'returningUsers',
-      definition: 'Active users who signed up before this window.',
-      segment: 'returning',
-    },
-    {
       label: 'Payment opened',
       key: 'paymentOpened',
       definition: 'Distinct users who opened the payment page in this window, including new and existing users.',
@@ -615,6 +609,12 @@ export default function GrowthDashboard({ token, permissions }: { token: string;
       key: 'revenue',
       format: inr,
       definition: 'Successful positive payments dated in this window. INR; BYPASS excluded.',
+    },
+    {
+      label: 'Returning users',
+      key: 'returningUsers',
+      definition: 'Active users who signed up before this window.',
+      segment: 'returning',
     },
   ];
   return (
@@ -726,7 +726,7 @@ export default function GrowthDashboard({ token, permissions }: { token: string;
         id="snapshot"
         number="01"
         title="The business, at a glance"
-        subtitle="Follow acquisition → engagement → monetization. Every comparison uses the preceding window of equal length."
+        subtitle="Follow acquisition → engagement → monetization → retention. Every comparison uses the preceding window of equal length."
       >
         <div className={styles.kpis} aria-busy={product.loading}>
           {metrics.map((m, i) => (
@@ -737,7 +737,13 @@ export default function GrowthDashboard({ token, permissions }: { token: string;
               style={{ '--accent': palette[i % palette.length] } as React.CSSProperties}
             >
               <div className={styles.eyebrow}>
-                {i < 2 ? '01 · Acquisition' : i < 5 ? '02 · Engagement' : '03 · Monetization'}
+                {i < 2
+                  ? '01 · Acquisition'
+                  : i < 4
+                    ? '02 · Engagement'
+                    : i < 7
+                      ? '03 · Monetization'
+                      : '04 · Retention'}
               </div>
               <div className={styles.kpiLabel}>
                 {m.label}

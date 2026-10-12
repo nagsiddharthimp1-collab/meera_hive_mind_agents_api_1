@@ -50,7 +50,7 @@ check(await page.getByRole('heading',{name:'Who is using Meera?'}).isVisible(),'
 check(await page.locator('#snapshot').innerText().then(t=>t.includes('₹499')),'real-data revenue renders');
 const cards=page.locator('#snapshot article');
 check(await cards.count()===8,'eight headline cards remain');
-check((await cards.allTextContents()).map(t=>t.match(/Registered users|New signups|Engaged new users|Returning users|Avg\. messages \/ new user|Payment opened|Paying customers|Revenue collected/)?.[0]).join('|')==='Registered users|New signups|Engaged new users|Avg. messages / new user|Returning users|Payment opened|Paying customers|Revenue collected','headline cards follow acquisition, engagement, monetization');
+check((await cards.allTextContents()).map(t=>t.match(/Registered users|New signups|Engaged new users|Returning users|Avg\. messages \/ new user|Payment opened|Paying customers|Revenue collected/)?.[0]).join('|')==='Registered users|New signups|Engaged new users|Avg. messages / new user|Payment opened|Paying customers|Revenue collected|Returning users','headline cards follow acquisition, engagement, monetization, retention');
 check(await cards.filter({hasText:'Engaged new users'}).innerText().then(t=>t.includes('of new signups')&&t.includes('10+ messages')),'engagement card explains threshold and signup share');
 check(await cards.filter({hasText:'Engaged new users'}).innerText().then(t=>t.includes('7.5%')),'engagement signup percentage renders accurately');
 await cards.filter({hasText:'Engaged new users'}).getByRole('button').click();
