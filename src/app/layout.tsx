@@ -14,6 +14,9 @@ export async function generateMetadata(): Promise<Metadata> {
 
   return {
     metadataBase: new URL(siteUrl),
+    verification: {
+      google: 'Ifiisb07Phvts9AKAl78XPD5H-yhGxLDh00nlw5Xky0',
+    },
     title: `${appName} — Your Personal Companion`,
     description: 'Talk through bad days, learn something new, or simply have someone to talk to.',
     openGraph: {
