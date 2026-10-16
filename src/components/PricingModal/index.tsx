@@ -11,7 +11,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import Image from 'next/image';
 import Link from 'next/link';
 import { ReactNode, useEffect, useRef, useState } from 'react';
-import { toast } from 'react-hot-toast';
+import { toast, Toaster } from 'react-hot-toast';
 import { HiArrowLeft } from 'react-icons/hi2';
 import meeraLogo from '../../../public/icons/meera.svg';
 import starBg from '../../../public/images/star.png';
@@ -478,6 +478,7 @@ export const PricingModal = ({ isOpen, onClose, isClosable, source }: PricingMod
     <AnimatePresence>
       {isOpen && (
         <>
+          <Toaster position="top-center" containerStyle={{ zIndex: 10001 }} />
           {/* Backdrop */}
           <div
             className="fixed inset-0 bg-black/30 backdrop-blur-sm z-[9998]"
