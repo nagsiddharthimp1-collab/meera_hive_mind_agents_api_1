@@ -17,7 +17,7 @@ import { useSubscriptionStatus } from '@/hooks/useSubscriptionStatus';
 import { useTotalCostTokens } from '@/hooks/useTotalCostTokens';
 import { formatWhatsAppStyle, getLocalDateKeyFromTimestamp } from '@/lib/dateUtils';
 import { getSystemInfo } from '@/lib/deviceInfo';
-import { isPaidPlanExpired } from '@/lib/subscriptionUtils';
+import { isPaidPlanActive, isPaidPlanExpired } from '@/lib/subscriptionUtils';
 import { supabase } from '@/lib/supabaseClient';
 import { debounce, throttle } from '@/lib/utils';
 import { ChatAttachmentFromServer, ChatAttachmentInputState, ChatMessageFromServer } from '@/types/chat';
@@ -425,6 +425,7 @@ export const Conversation: React.FC = () => {
     isLoading: isSubscriptionLoading,
     isError: isSubscriptionError,
   } = useSubscriptionStatus();
+  const showSubscribe = !isSubscriptionLoading && !!subscriptionData && !isPaidPlanActive(subscriptionData);
   const { showToast, clearToasts } = useToast();
   const { openModal } = usePricingModal();
 
@@ -1896,6 +1897,7 @@ export const Conversation: React.FC = () => {
           style={{ paddingTop: 'calc(env(safe-area-inset-top) + 1rem)' }}
         >
           <div className="w-full mx-auto flex items-center justify-between">
+            <div className="flex items-center gap-2">
             {isImagesView || isConnectorsView ? (
               <button
                 type="button"
@@ -1933,13 +1935,24 @@ export const Conversation: React.FC = () => {
               </>
             )}
 
-            <div className="absolute left-1/2 transform -translate-x-1/2 flex items-center">
+              {showSubscribe && (
+                <button
+                  type="button"
+                  onClick={handleOpenUpgrade}
+                  className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-full bg-primary px-4 text-sm font-semibold text-background shadow-sm transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                >
+                  Subscribe
+                </button>
+              )}
+            </div>
+
+            <div className={showSubscribe ? 'ml-3 flex items-center sm:absolute sm:left-1/2 sm:ml-0 sm:-translate-x-1/2' : 'absolute left-1/2 -translate-x-1/2 flex items-center'}>
               <h1 className="text-lg text-primary md:text-xl font-sans">
                 {isImagesView ? 'My images' : isConnectorsView ? 'Connectors' : process.env.NEXT_PUBLIC_APP_NAME}
               </h1>
             </div>
 
-            <div className="w-9 h-9" />
+            <div className={showSubscribe ? 'hidden w-9 h-9 sm:block' : 'w-9 h-9'} />
           </div>
         </header>
 
