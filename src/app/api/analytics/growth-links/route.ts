@@ -92,7 +92,7 @@ export async function GET(request: NextRequest) {
       .limit(10000),
     auth.supabase
       .from('payments')
-      .select('user_id, payment_status, amount, coupon_code, created_at')
+      .select('user_id, payment_status, amount, currency, coupon_code, created_at')
       .gte('created_at', fromIso)
       .lt('created_at', toExclusiveIso)
       .limit(10000),
@@ -120,14 +120,19 @@ export async function GET(request: NextRequest) {
   }
 
   const openedAuthIds = new Set((openedResult.data ?? []).map((row) => String(row.user_id ?? '')).filter(Boolean));
-  const paidByInternalId = new Map<string, number>();
+  const paidByInternalId = new Map<string, { inr: number; usd: number }>();
   for (const payment of paymentsResult.data ?? []) {
     const status = String(payment.payment_status ?? '').toLowerCase();
     const coupon = String(payment.coupon_code ?? '').toUpperCase();
     const amount = Number(payment.amount ?? 0);
     if (!PAID_STATUSES.has(status) || coupon === 'BYPASS' || !Number.isFinite(amount) || amount <= 0) continue;
     const userId = String(payment.user_id ?? '');
-    if (userId) paidByInternalId.set(userId, (paidByInternalId.get(userId) ?? 0) + amount);
+    if (userId) {
+      const totals = paidByInternalId.get(userId) ?? { inr: 0, usd: 0 };
+      if (payment.currency === 'USD') totals.usd += amount;
+      else if (payment.currency === 'INR') totals.inr += amount;
+      paidByInternalId.set(userId, totals);
+    }
   }
 
   const links = ((linksResult.data ?? []) as GrowthLinkRow[]).map((link) => {
@@ -137,12 +142,14 @@ export async function GET(request: NextRequest) {
     const paymentOpened = Array.from(attributedAuthIds).filter((id) => openedAuthIds.has(id)).length;
     let paid = 0;
     let revenue = 0;
+    let revenueUsd = 0;
     for (const authId of attributedAuthIds) {
       const internalId = authToInternal.get(authId);
-      const amount = internalId ? (paidByInternalId.get(internalId) ?? 0) : 0;
-      if (amount > 0) {
+      const amount = internalId ? paidByInternalId.get(internalId) : null;
+      if (amount && (amount.inr > 0 || amount.usd > 0)) {
         paid += 1;
-        revenue += amount;
+        revenue += amount.inr;
+        revenueUsd += amount.usd;
       }
     }
     return {
@@ -155,6 +162,7 @@ export async function GET(request: NextRequest) {
         payment_opened: paymentOpened,
         paid,
         revenue,
+        revenue_usd: revenueUsd,
         click_to_signup: clicks.length ? Number((attributedAuthIds.size / clicks.length).toFixed(4)) : 0,
       },
     };

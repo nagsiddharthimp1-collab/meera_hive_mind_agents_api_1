@@ -1,7 +1,7 @@
 'use client';
 
 import { PricingModalProvider, usePricingModal } from '@/contexts/PricingModalContext';
-import { useSubscriptionStatus } from '@/hooks/useSubscriptionStatus';
+import { SUBSCRIPTION_QUERY_KEY, useSubscriptionStatus } from '@/hooks/useSubscriptionStatus';
 import {
   clearAuthRedirectTrace,
   logAuthRedirectEvent,
@@ -9,7 +9,8 @@ import {
   type SessionStatus,
 } from '@/lib/authRedirect';
 import { supabase } from '@/lib/supabaseClient';
-import { useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
+import { useRouter, useSearchParams } from 'next/navigation';
 import React, { Suspense, useEffect, useRef, useState } from 'react';
 
 function PaymentRouteContent() {
@@ -19,7 +20,60 @@ function PaymentRouteContent() {
   const [sessionAccessToken, setSessionAccessToken] = useState<string>('');
   const { openModal } = usePricingModal();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const checkoutSessionId = searchParams.get('checkout_session_id');
+  const [checkoutStatus, setCheckoutStatus] = useState<'checking' | 'pending' | 'expired' | 'error'>('checking');
+  const [checkAttempt, setCheckAttempt] = useState(0);
+  const queryClient = useQueryClient();
   const modalOpenedRef = useRef(false);
+
+  useEffect(() => {
+    if (!checkoutSessionId || !sessionAccessToken) return;
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout>;
+    let attempts = 0;
+    setCheckoutStatus('checking');
+    const checkPayment = async () => {
+      try {
+        const response = await fetch(`/api/payment/stripe/status?session_id=${encodeURIComponent(checkoutSessionId)}`, {
+          headers: { Authorization: `Bearer ${sessionAccessToken}` },
+          cache: 'no-store',
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error('Payment check failed');
+        const result = await response.json();
+        if (controller.signal.aborted) return;
+        if (result.status === 'paid') {
+          await queryClient.invalidateQueries({ queryKey: SUBSCRIPTION_QUERY_KEY });
+          router.replace('/');
+          return;
+        }
+        if (result.status === 'expired') {
+          setCheckoutStatus('expired');
+          return;
+        }
+        attempts += 1;
+        if (attempts >= 20) {
+          setCheckoutStatus('pending');
+          return;
+        }
+        timer = setTimeout(checkPayment, 3000);
+      } catch {
+        if (!controller.signal.aborted) setCheckoutStatus('error');
+      }
+    };
+    void checkPayment();
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [
+    checkoutSessionId,
+    sessionAccessToken,
+    checkAttempt,
+    queryClient,
+    router,
+  ]);
 
   useEffect(() => {
     let mounted = true;
@@ -44,6 +98,7 @@ function PaymentRouteContent() {
   }, []);
 
   useEffect(() => {
+    if (checkoutSessionId && sessionStatus !== 'unauthenticated') return;
     const decision = resolvePaymentRouteDecision({
       sessionStatus,
       isSubscriptionLoading: isLoadingSubscription,
@@ -90,7 +145,53 @@ function PaymentRouteContent() {
     if (sessionStatus === 'authenticated' && decision.reason !== 'payment_required') {
       clearAuthRedirectTrace();
     }
-  }, [isLoadingSubscription, openModal, router, sessionAccessToken, sessionStatus, sessionUserId, subscriptionData]);
+  }, [
+    checkoutSessionId,
+    isLoadingSubscription,
+    openModal,
+    router,
+    sessionAccessToken,
+    sessionStatus,
+    sessionUserId,
+    subscriptionData,
+  ]);
+
+  if (checkoutSessionId) {
+    return (
+      <main className="flex min-h-[100dvh] items-center justify-center bg-background px-6 text-center text-primary">
+        <section className="max-w-md rounded-3xl border border-primary/15 bg-white p-8" aria-live="polite">
+          <h1 className="font-serif text-3xl">
+            {checkoutStatus === 'checking'
+              ? 'Confirming your payment…'
+              : checkoutStatus === 'expired'
+                ? 'Checkout expired'
+                : 'Your payment confirmation'}
+          </h1>
+          <p className="mt-4 text-primary/75">
+            {checkoutStatus === 'checking'
+              ? 'We’re securely checking your payment. Your lifetime access opens as soon as it’s confirmed.'
+              : checkoutStatus === 'expired'
+                ? 'This checkout session has expired. You can return to the payment page to try again.'
+                : 'Your confirmation may take a moment. If you completed payment, please don’t pay again. Check the status or contact us for help.'}
+          </p>
+          {checkoutStatus !== 'checking' && (
+            <button
+              className="mt-6 rounded-full bg-primary px-6 py-3 text-background"
+              onClick={() => {
+                if (checkoutStatus === 'expired') router.replace('/payment');
+                else setCheckAttempt((value) => value + 1);
+              }}
+            >
+              {checkoutStatus === 'expired' ? 'Back to checkout' : 'Check payment status'}
+            </button>
+          )}
+          <a className="mt-5 block text-sm underline" href="mailto:siddharth.nag@himeera.com">
+            Contact support
+          </a>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <div className="min-h-[100dvh] flex items-center justify-center bg-background px-6 text-center">

@@ -13,6 +13,7 @@
 /.next/
 /.next-agentic*/
 /.next-labs*/
+/.next-stripe*/
 /out/
 
 # production
@@ -43,3 +44,5 @@ next-env.d.ts
 # Environment variables
 .env.prod
 .env.dev
+
+.env*

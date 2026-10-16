@@ -41,6 +41,7 @@ type FunnelUserRow = {
   payment_status: string | null;
   plan_type: 'monthly' | 'lifetime' | null;
   amount: number | null;
+  currency?: string | null;
   last_payment_at: string | null;
   message_count: number;
   last_active_at: string | null;
@@ -120,6 +121,7 @@ type GrowthLink = {
     payment_opened: number;
     paid: number;
     revenue: number;
+    revenue_usd?: number;
     click_to_signup: number;
   };
 };
@@ -247,9 +249,9 @@ function formatDateTime(value: string | null): string {
   });
 }
 
-function formatAmount(value: number | null): string {
+function formatAmount(value: number | null, currency?: string | null): string {
   if (value === null) return '—';
-  return formatInt(value);
+  return currency === 'USD' ? `US$${formatInt(value)}` : formatInr(value);
 }
 
 function stageFlag(isTrue: boolean): string {
@@ -872,8 +874,9 @@ export default function AnalyticsPage() {
       signups: totals.signups + link.metrics.signups,
       paid: totals.paid + link.metrics.paid,
       revenue: totals.revenue + link.metrics.revenue,
+      revenue_usd: totals.revenue_usd + (link.metrics.revenue_usd ?? 0),
     }),
-    { clicks: 0, signups: 0, paid: 0, revenue: 0 },
+    { clicks: 0, signups: 0, paid: 0, revenue: 0, revenue_usd: 0 },
   );
   return (
     <main className="min-h-[100dvh] bg-background px-4 py-4 text-primary sm:px-6 sm:py-6">
@@ -1205,7 +1208,7 @@ export default function AnalyticsPage() {
                     ],
                     [
                       'Revenue',
-                      `₹${formatInt(growthTotals.revenue)}`,
+                      `₹${formatInt(growthTotals.revenue)} · US$${formatInt(growthTotals.revenue_usd)}`,
                       'bg-amber-500',
                     ],
                   ].map(
@@ -1353,7 +1356,10 @@ export default function AnalyticsPage() {
                             ['Signups', link.metrics.signups],
                             ['Opened', link.metrics.payment_opened],
                             ['Paid', link.metrics.paid],
-                            ['Revenue', `₹${formatInt(link.metrics.revenue)}`],
+                            [
+                              'Revenue',
+                              `₹${formatInt(link.metrics.revenue)} · US$${formatInt(link.metrics.revenue_usd ?? 0)}`,
+                            ],
                             ['CVR', formatPct(link.metrics.click_to_signup)],
                           ].map(([label, value]) => (
                             <div key={String(label)} className="rounded-xl bg-primary/5 p-2.5">
@@ -1653,7 +1659,7 @@ export default function AnalyticsPage() {
                                   <td className="px-3 py-2">{formatDateTime(user.signup_at)}</td>
                                   <td className="px-3 py-2">{user.payment_status || '—'}</td>
                                   <td className="px-3 py-2">{user.plan_type || '—'}</td>
-                                  <td className="px-3 py-2">{formatAmount(user.amount)}</td>
+                                  <td className="px-3 py-2">{formatAmount(user.amount, user.currency)}</td>
                                   <td className="px-3 py-2">{stageFlag(user.payment_opened)}</td>
                                   <td className="px-3 py-2">{stageFlag(user.paid)}</td>
                                   <td className="px-3 py-2">{stageFlag(user.active)}</td>

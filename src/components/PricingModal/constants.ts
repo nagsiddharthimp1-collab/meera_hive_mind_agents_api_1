@@ -3,6 +3,8 @@ export const PLAN_PRICES = {
   lifetime: 499,
 } as const;
 
+export const INTERNATIONAL_LIFETIME_PRICE_USD = 99;
+
 export const COUPON_CODES = {
   BYPASS: 100, // 100% discount
 } as const;

@@ -1,15 +1,15 @@
+import { getGuestToken as getStoredGuestToken } from '@/lib/authRedirect';
+import { supabase } from '@/lib/supabaseClient';
 import type {
   CreatePaymentRequest,
-  PaymentCustomerDetails,
   CreatePaymentResponse,
   DeductTalktimeRequest,
   DeductTalktimeResponse,
+  PaymentCustomerDetails,
   SubscriptionStatusResponse,
   VerifyPaymentRequest,
   VerifyPaymentResponse,
 } from '@/types/api';
-import { getGuestToken as getStoredGuestToken } from '@/lib/authRedirect';
-import { supabase } from '@/lib/supabaseClient';
 import { api } from '../client';
 import { API_ENDPOINTS } from '../config';
 
@@ -124,9 +124,12 @@ export const paymentService = {
     }
   },
 
-  async getSubscriptionStatus(): Promise<SubscriptionStatusResponse> {
+  async getSubscriptionStatus(forceRefresh = false): Promise<SubscriptionStatusResponse> {
     try {
-      return await api.get<SubscriptionStatusResponse>(API_ENDPOINTS.PAYMENT.SUBSCRIPTION_STATUS);
+      return await api.get<SubscriptionStatusResponse>(
+        API_ENDPOINTS.PAYMENT.SUBSCRIPTION_STATUS,
+        forceRefresh ? { headers: { 'Cache-Control': 'no-cache' } } : undefined,
+      );
     } catch (error) {
       console.error('Error in getSubscriptionStatus:', error);
 

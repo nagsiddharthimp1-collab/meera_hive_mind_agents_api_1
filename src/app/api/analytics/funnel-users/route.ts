@@ -1,15 +1,15 @@
-import { NextRequest, NextResponse } from 'next/server';
-import type { SupabaseClient } from '@supabase/supabase-js';
 import { requireAnalyticsPermission } from '@/lib/analyticsAccess';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { NextRequest, NextResponse } from 'next/server';
 
 const SUPABASE_URL = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const DEFAULT_ALLOWED_DOMAIN = (process.env.ANALYTICS_ALLOWED_EMAIL_DOMAIN ?? 'himeera.com')
-  .trim()
-  .toLowerCase();
+const DEFAULT_ALLOWED_DOMAIN = (process.env.ANALYTICS_ALLOWED_EMAIL_DOMAIN ?? 'himeera.com').trim().toLowerCase();
 const EXCLUDED_ANALYTICS_EMAIL_DOMAINS = new Set(
-  (process.env.ANALYTICS_EXCLUDED_EMAIL_DOMAINS ??
-    `example.com,example.net,example.org,example.invalid,invalid,local,localhost,${DEFAULT_ALLOWED_DOMAIN}`)
+  (
+    process.env.ANALYTICS_EXCLUDED_EMAIL_DOMAINS ??
+    `example.com,example.net,example.org,example.invalid,invalid,local,localhost,${DEFAULT_ALLOWED_DOMAIN}`
+  )
     .split(',')
     .map((value) => value.trim().toLowerCase().replace(/^@/, ''))
     .filter(Boolean),
@@ -26,15 +26,11 @@ const EXCLUDED_ANALYTICS_EMAIL_PREFIXES = (
   .split(',')
   .map((value) => value.trim().toLowerCase())
   .filter(Boolean);
-const EXCLUDED_ANALYTICS_NAME_PREFIXES = (
-  process.env.ANALYTICS_EXCLUDED_NAME_PREFIXES ?? 'codex,memory keyword smoke'
-)
+const EXCLUDED_ANALYTICS_NAME_PREFIXES = (process.env.ANALYTICS_EXCLUDED_NAME_PREFIXES ?? 'codex,memory keyword smoke')
   .split(',')
   .map((value) => value.trim().toLowerCase())
   .filter(Boolean);
-const EXCLUDED_ANALYTICS_ID_FRAGMENTS = (
-  process.env.ANALYTICS_EXCLUDED_ID_FRAGMENTS ?? 'bypass,smoke,codex,test,e2e'
-)
+const EXCLUDED_ANALYTICS_ID_FRAGMENTS = (process.env.ANALYTICS_EXCLUDED_ID_FRAGMENTS ?? 'bypass,smoke,codex,test,e2e')
   .split(',')
   .map((value) => value.trim().toLowerCase())
   .filter(Boolean);
@@ -50,7 +46,11 @@ const USER_FETCH_CHUNK = 500;
 const MAX_PAYMENT_LOOKBACK_DAYS = 400;
 const MAX_USERS_RETURN = 5000;
 
-const PAYMENT_GRANT_STATUSES = new Set(['paid', 'active', 'success']);
+const PAYMENT_GRANT_STATUSES = new Set([
+  'paid',
+  'active',
+  'success',
+]);
 
 type StageKey = 'signups' | 'payment_page_opened' | 'paid' | 'active';
 
@@ -73,6 +73,7 @@ type PaymentRow = {
   order_id: string | null;
   coupon_code: string | null;
   payment_method: string | null;
+  currency: string | null;
 };
 
 type UserRecord = Record<string, unknown> & { id?: string | null };
@@ -94,6 +95,7 @@ type PaymentSnapshot = {
   latestStatus: string | null;
   latestPlanType: 'monthly' | 'lifetime' | null;
   latestAmount: number | null;
+  latestCurrency: string | null;
   latestPaymentAt: string | null;
   openedInWindow: boolean;
   paidInWindow: boolean;
@@ -105,15 +107,21 @@ type ActiveSnapshot = {
 };
 
 function normalizeStatus(status: unknown): string {
-  return String(status ?? '').trim().toLowerCase();
+  return String(status ?? '')
+    .trim()
+    .toLowerCase();
 }
 
 function normalizeCouponCode(couponCode: unknown): string {
-  return String(couponCode ?? '').trim().toUpperCase();
+  return String(couponCode ?? '')
+    .trim()
+    .toUpperCase();
 }
 
 function normalizePlanType(planType: unknown): 'monthly' | 'lifetime' | null {
-  const normalized = String(planType ?? '').trim().toLowerCase();
+  const normalized = String(planType ?? '')
+    .trim()
+    .toLowerCase();
   if (normalized === 'monthly' || normalized === 'lifetime') return normalized;
   return null;
 }
@@ -135,7 +143,11 @@ function inferPlanType(row: PaymentRow): 'monthly' | 'lifetime' | null {
 }
 
 function resolvePaymentTimestamp(row: PaymentRow): number | null {
-  const candidates = [row.payment_date, row.created_at, row.updated_at];
+  const candidates = [
+    row.payment_date,
+    row.created_at,
+    row.updated_at,
+  ];
   for (const candidate of candidates) {
     if (typeof candidate !== 'string' || !candidate.trim()) continue;
     const ts = Date.parse(candidate);
@@ -176,7 +188,9 @@ function isUuidLike(value: string): boolean {
 }
 
 function hasExcludedSyntheticId(value: unknown): boolean {
-  const normalized = String(value ?? '').trim().toLowerCase();
+  const normalized = String(value ?? '')
+    .trim()
+    .toLowerCase();
   if (!normalized || isUuidLike(normalized)) return false;
   return EXCLUDED_ANALYTICS_ID_FRAGMENTS.some((fragment) => normalized.includes(fragment));
 }
@@ -186,15 +200,23 @@ function isRealAnalyticsUser(row: SignupUserRow): boolean {
 
   if (hasExcludedSyntheticId(row.id)) return false;
 
-  const email = String(row.email ?? '').trim().toLowerCase();
-  const name = String(row.name ?? '').trim().toLowerCase();
+  const email = String(row.email ?? '')
+    .trim()
+    .toLowerCase();
+  const name = String(row.name ?? '')
+    .trim()
+    .toLowerCase();
 
   // Analytics only includes identifiable, external accounts. Email-less UUID rows
   // are typically incomplete auth/test records and must not affect any stage.
   const emailMatch = email.match(/^([^\s@]+)@([^\s@]+\.[^\s@]+)$/);
   if (!emailMatch) return false;
 
-  const [, localPart, domain] = emailMatch;
+  const [
+    ,
+    localPart,
+    domain,
+  ] = emailMatch;
   if (EXCLUDED_ANALYTICS_EMAILS.has(email)) return false;
   if (EXCLUDED_ANALYTICS_EMAIL_DOMAINS.has(domain)) return false;
   if (EXCLUDED_ANALYTICS_EMAIL_PREFIXES.some((prefix) => localPart.startsWith(prefix))) return false;
@@ -209,8 +231,15 @@ function isBypassPayment(payment: PaymentRow): boolean {
   const couponCode = normalizeCouponCode(payment.coupon_code);
   if (couponCode && BYPASS_COUPON_CODES.has(couponCode)) return true;
 
-  return [payment.user_id, payment.payment_id, payment.order_id].some((value) =>
-    String(value ?? '').trim().toLowerCase().includes('bypass'),
+  return [
+    payment.user_id,
+    payment.payment_id,
+    payment.order_id,
+  ].some((value) =>
+    String(value ?? '')
+      .trim()
+      .toLowerCase()
+      .includes('bypass'),
   );
 }
 
@@ -317,7 +346,7 @@ async function fetchWeeklyActiveUserSnapshotMap(
       if (!id || latest === undefined) continue;
 
       activeMap.set(id, {
-        messageCount: authId ? messageCountByAuthId.get(authId) ?? 0 : 0,
+        messageCount: authId ? (messageCountByAuthId.get(authId) ?? 0) : 0,
         lastActiveAt: new Date(latest).toISOString(),
       });
     }
@@ -337,7 +366,9 @@ async function fetchPaymentsByCreatedAtWindow(
   while (true) {
     const { data, error } = await supabase
       .from('payments')
-      .select('payment_id, user_id, payment_status, plan_type, payment_date, created_at, updated_at, amount, order_id, coupon_code, payment_method')
+      .select(
+        'payment_id, user_id, payment_status, plan_type, payment_date, created_at, updated_at, amount, order_id, coupon_code, payment_method, currency',
+      )
       .gte('created_at', fromIso)
       .lt('created_at', toExclusiveIso)
       .order('created_at', { ascending: true })
@@ -399,10 +430,7 @@ async function fetchPaymentOpenedUserIds(
   return userIds;
 }
 
-async function fetchPaymentsForSnapshot(
-  supabase: SupabaseClient,
-  toExclusiveIso: string,
-): Promise<PaymentRow[]> {
+async function fetchPaymentsForSnapshot(supabase: SupabaseClient, toExclusiveIso: string): Promise<PaymentRow[]> {
   const rows: PaymentRow[] = [];
   const toExclusiveDate = new Date(toExclusiveIso);
   const lookbackStart = addDaysUtc(toExclusiveDate, -MAX_PAYMENT_LOOKBACK_DAYS).toISOString();
@@ -411,7 +439,9 @@ async function fetchPaymentsForSnapshot(
   while (true) {
     const { data, error } = await supabase
       .from('payments')
-      .select('payment_id, user_id, payment_status, plan_type, payment_date, created_at, updated_at, amount, order_id, coupon_code, payment_method')
+      .select(
+        'payment_id, user_id, payment_status, plan_type, payment_date, created_at, updated_at, amount, order_id, coupon_code, payment_method, currency',
+      )
       .gte('created_at', lookbackStart)
       .lt('created_at', toExclusiveIso)
       .order('created_at', { ascending: true })
@@ -442,10 +472,7 @@ async function fetchUsersByIds(supabase: SupabaseClient, ids: string[]): Promise
   const chunks = chunkArray(ids, USER_FETCH_CHUNK);
 
   for (const chunk of chunks) {
-    const { data, error } = await supabase
-      .from('users')
-      .select('id, auth_id, email, name, created_at')
-      .in('id', chunk);
+    const { data, error } = await supabase.from('users').select('id, auth_id, email, name, created_at').in('id', chunk);
     if (error) throw new Error(`Failed loading users for drilldown: ${error.message}`);
 
     for (const row of (data ?? []) as UserRecord[]) {
@@ -493,6 +520,7 @@ function buildPaymentSnapshotMap(
       latestStatus: null,
       latestPlanType: null,
       latestAmount: null,
+      latestCurrency: null,
       latestPaymentAt: null,
       openedInWindow: false,
       paidInWindow: false,
@@ -513,6 +541,7 @@ function buildPaymentSnapshotMap(
         existing.latestStatus = status || null;
         existing.latestPlanType = plan;
         existing.latestAmount = amount;
+        existing.latestCurrency = payment.currency;
         existing.latestPaymentAt = new Date(ts).toISOString();
       }
     }
@@ -548,7 +577,9 @@ export async function GET(request: NextRequest) {
   const fromDate = parseDateParam(searchParams.get('from'), defaultFrom);
   const toDate = parseDateParam(searchParams.get('to'), now);
 
-  const normalizedFromDate = new Date(Date.UTC(fromDate.getUTCFullYear(), fromDate.getUTCMonth(), fromDate.getUTCDate()));
+  const normalizedFromDate = new Date(
+    Date.UTC(fromDate.getUTCFullYear(), fromDate.getUTCMonth(), fromDate.getUTCDate()),
+  );
   const normalizedToDate = new Date(Date.UTC(toDate.getUTCFullYear(), toDate.getUTCMonth(), toDate.getUTCDate()));
 
   if (normalizedToDate < normalizedFromDate) {
@@ -563,7 +594,13 @@ export async function GET(request: NextRequest) {
   const supabase = auth.supabase;
 
   try {
-    const [signupUserIds, paymentOpenedEventUsers, paymentsInWindow, paymentsForSnapshot, activeSnapshotMap] = await Promise.all([
+    const [
+      signupUserIds,
+      paymentOpenedEventUsers,
+      paymentsInWindow,
+      paymentsForSnapshot,
+      activeSnapshotMap,
+    ] = await Promise.all([
       fetchSignupUserIds(supabase, fromIso, toExclusiveIso),
       fetchPaymentOpenedUserIds(supabase, fromIso, toExclusiveIso),
       fetchPaymentsByCreatedAtWindow(supabase, fromIso, toExclusiveIso),
@@ -608,8 +645,13 @@ export async function GET(request: NextRequest) {
       const paymentSnapshot = paymentSnapshotMap.get(userId);
 
       const sourceChannel =
-        pickString(user, ['acquisition_channel', 'source_channel', 'signup_source', 'source', 'utm_source']) ??
-        'unknown';
+        pickString(user, [
+          'acquisition_channel',
+          'source_channel',
+          'signup_source',
+          'source',
+          'utm_source',
+        ]) ?? 'unknown';
 
       return {
         user_id: userId,
@@ -617,7 +659,11 @@ export async function GET(request: NextRequest) {
         name: pickString(user, ['name', 'full_name']),
         signup_at: pickString(user, ['created_at', 'signup_at']),
         source_channel: sourceChannel,
-        campaign: pickString(user, ['campaign_id', 'campaign', 'utm_campaign']),
+        campaign: pickString(user, [
+          'campaign_id',
+          'campaign',
+          'utm_campaign',
+        ]),
         country: pickString(user, ['country_code', 'country']),
         payment_opened: paymentPageOpenedUsers.has(userId),
         paid: paidUsers.has(userId),
@@ -625,6 +671,7 @@ export async function GET(request: NextRequest) {
         payment_status: paymentSnapshot?.latestStatus ?? null,
         plan_type: paymentSnapshot?.latestPlanType ?? null,
         amount: paymentSnapshot?.latestAmount ?? null,
+        currency: paymentSnapshot?.latestCurrency ?? null,
         last_payment_at: paymentSnapshot?.latestPaymentAt ?? null,
         message_count: activeSnapshotMap.get(userId)?.messageCount ?? 0,
         last_active_at: activeSnapshotMap.get(userId)?.lastActiveAt ?? null,

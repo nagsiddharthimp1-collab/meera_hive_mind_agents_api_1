@@ -7,7 +7,7 @@ import Link from 'next/link';
 // import { Footer } from '@/app/about/components/Footer';
 
 export default function Terms() {
-  const appName = process.env.NEXT_PUBLIC_APP_NAME ;
+  const appName = process.env.NEXT_PUBLIC_APP_NAME;
   const appNameOS = `${appName} OS`;
 
   return (
@@ -22,8 +22,9 @@ export default function Terms() {
             <p>Effective Date: October 5, 2026</p>
 
             <p>
-              {appNameOS} is provided by Meera Labs Inc., a Delaware corporation. By accessing or using {appNameOS}, you agree to comply with and be bound by the
-              following Terms and Conditions. Please read them carefully before using our platform.
+              {appNameOS} is provided by Meera Labs Inc., a Delaware corporation. By accessing or using {appNameOS}, you
+              agree to comply with and be bound by the following Terms and Conditions. Please read them carefully before
+              using our platform.
             </p>
 
             <h2 className="text-2xl font-bold text-primary mt-12 mb-4">1. Acceptance of Terms</h2>
@@ -72,15 +73,10 @@ export default function Terms() {
             <h2 className="text-2xl font-bold text-primary mt-12 mb-4">6. Payment and Access</h2>
             <ul className="list-disc space-y-2 pl-5">
               <li>
-                {appNameOS} offers two paid plans:
-                <br />
-                30-day access: ₹129 as a one-time purchase
-                <br />
-                Lifetime access: ₹499 as a one-time purchase
-                <br/>
-                Both plans include text chat, web, and images. Access begins after payment is confirmed. The 30-day plan
-                expires after 30 days unless you purchase access again. Neither plan renews automatically. The final
-                price, including any discount, is displayed before payment.
+                {appNameOS} offers lifetime access for ₹499 in India through Cashfree, or US$99 internationally through
+                Stripe, as a one-time purchase. This includes text chat, web, and images. Access begins after payment is
+                confirmed. There is no automatic renewal. The final price, including any discount, is displayed before
+                payment. Previously purchased 30-day access remains valid for its original term.
               </li>
               <li>
                 For refund requests, please contact us at{' '}
@@ -88,13 +84,14 @@ export default function Terms() {
                   siddharth.nag@himeera.com
                 </a>{' '}
                 with your purchase details and reason for the request. Payments are generally non-refundable unless
-                required by applicable law. If a refund is approved, it will be
-                processed, and a credit will automatically be applied to your credit card or original method of payment,
-                within 7 working days.
+                required by applicable law. If a refund is approved, it will be processed, and a credit will
+                automatically be applied to your credit card or original method of payment, within 7 working days.
               </li>
               <li>
                 For an unrecognized charge or other payment dispute, email us at{' '}
-                <a href="mailto:siddharth.nag@himeera.com" className="text-primary hover:text-primary/70">siddharth.nag@himeera.com</a>{' '}
+                <a href="mailto:siddharth.nag@himeera.com" className="text-primary hover:text-primary/70">
+                  siddharth.nag@himeera.com
+                </a>{' '}
                 with the purchase date and account email so we can investigate.
               </li>
             </ul>
@@ -147,8 +144,8 @@ export default function Terms() {
 
             <h2 className="text-2xl font-bold text-primary mt-12 mb-4">12. Business Identity</h2>
             <p>
-              These terms are issued by Meera Labs Inc., a corporation incorporated in Delaware, United States.
-              Its registered legal address is 8 The Green, Ste R, Dover, DE 19901, United States.
+              These terms are issued by Meera Labs Inc., a corporation incorporated in Delaware, United States. Its
+              registered legal address is 8 The Green, Ste R, Dover, DE 19901, United States.
             </p>
 
             <h2 className="text-2xl font-bold text-primary mt-12 mb-4">13. Contact Us</h2>

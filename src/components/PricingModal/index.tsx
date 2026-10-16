@@ -15,7 +15,7 @@ import { toast } from 'react-hot-toast';
 import { HiArrowLeft } from 'react-icons/hi2';
 import meeraLogo from '../../../public/icons/meera.svg';
 import starBg from '../../../public/images/star.png';
-import { COUPON_CODES, PLAN_PRICES } from './constants';
+import { COUPON_CODES, INTERNATIONAL_LIFETIME_PRICE_USD, PLAN_PRICES } from './constants';
 
 // Helper functions
 const calculateDiscountedPrice = (price: number, discountPercentage: number): number => {
@@ -23,19 +23,29 @@ const calculateDiscountedPrice = (price: number, discountPercentage: number): nu
   return Math.round(price - discount);
 };
 
-const getPriceDisplay = (basePrice: number, discountedPrice: number | null): ReactNode => {
+const getPriceDisplay = (basePrice: number, discountedPrice: number | null, currency = '₹'): ReactNode => {
   const currentPrice = discountedPrice ?? basePrice;
 
   return (
     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-      <span className="text-white font-semibold">₹{currentPrice}</span>
+      <span className="text-white font-semibold">
+        {currency}
+        {currentPrice}
+      </span>
       {currentPrice < basePrice && <span className="text-green-200 text-xs font-medium">Coupon applied</span>}
       {currentPrice === 0 && <span className="text-green-300 text-xs font-medium">(Free)</span>}
     </div>
   );
 };
 
-const CONFETTI_COLORS = ['#F59E0B', '#34D399', '#60A5FA', '#F472B6', '#F97316', '#A78BFA'] as const;
+const CONFETTI_COLORS = [
+  '#F59E0B',
+  '#34D399',
+  '#60A5FA',
+  '#F472B6',
+  '#F97316',
+  '#A78BFA',
+] as const;
 const CONFETTI_PIECES = Array.from({ length: 28 }, (_, index) => ({
   id: index,
   left: `${Math.round((index / 28) * 100)}%`,
@@ -53,7 +63,10 @@ const getErrorStatus = (error: unknown): number | null => {
 
 export const PricingModal = ({ isOpen, onClose, isClosable, source }: PricingModalProps) => {
   const [showEntryCode, setShowEntryCode] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState<PlanType>('lifetime');
+  const [market, setMarket] = useState<'india' | 'international' | null>(null);
+  const [stripeReady, setStripeReady] = useState(false);
+  const [offerError, setOfferError] = useState(false);
+  const selectedPlan: PlanType = 'lifetime';
   const [entryCode, setEntryCode] = useState('');
   const [cashfree, setCashfree] = useState<CashfreeInstance | null>(null);
   const [isPaymentLoading, setIsPaymentLoading] = useState(false);
@@ -67,6 +80,68 @@ export const PricingModal = ({ isOpen, onClose, isClosable, source }: PricingMod
   const queryClient = useQueryClient();
   const hasTrackedOpenRef = useRef(false);
   const successTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stripeRequestKey = useRef<string | null>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    dialogRef.current?.focus();
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && isClosable && !isPaymentLoading) onClose();
+      if (event.key !== 'Tab') return;
+      const controls = Array.from(
+        dialogRef.current?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), a[href], select:not([disabled]), input:not([disabled])',
+        ) ?? [],
+      ).filter((element) => element.getClientRects().length > 0);
+      const first = controls[0];
+      const last = controls[controls.length - 1];
+      if (!first) {
+        event.preventDefault();
+        return;
+      }
+      if (event.shiftKey && (document.activeElement === first || document.activeElement === dialogRef.current)) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || document.activeElement === dialogRef.current)) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', handleKey);
+      previousFocus?.focus();
+    };
+  }, [
+    isOpen,
+    isClosable,
+    isPaymentLoading,
+    showEntryCode,
+    onClose,
+  ]);
+
+  useEffect(() => {
+    if (!isOpen || market) return;
+    const controller = new AbortController();
+    fetch('/api/payment/offer', { signal: controller.signal, cache: 'no-store' })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('Offer unavailable');
+        return response.json();
+      })
+      .then((offer) => {
+        setMarket(offer.market === 'india' ? 'india' : 'international');
+        setStripeReady(offer.stripeReady === true);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setOfferError(true);
+      });
+    return () => controller.abort();
+  }, [isOpen, market]);
 
   useEffect(() => {
     if (isOpen && source) {
@@ -80,16 +155,21 @@ export const PricingModal = ({ isOpen, onClose, isClosable, source }: PricingMod
   }, [isOpen, source]);
 
   useEffect(() => {
+    if (!isOpen || market !== 'india') return;
+    let cancelled = false;
     const initializeCashfree = async () => {
       const rawMode = process.env.NEXT_PUBLIC_CASHFREE_MODE?.toLowerCase();
       const cashfreeMode: 'sandbox' | 'production' = rawMode === 'production' ? 'production' : 'sandbox';
       const cfInstance = await load({
         mode: cashfreeMode,
       });
-      setCashfree(cfInstance);
+      if (!cancelled) setCashfree(cfInstance);
     };
-    initializeCashfree();
-  }, []);
+    void initializeCashfree().catch(() => console.warn('Unable to load Cashfree checkout'));
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, market]);
 
   useEffect(() => {
     return () => {
@@ -186,7 +266,7 @@ export const PricingModal = ({ isOpen, onClose, isClosable, source }: PricingMod
 
   const refreshSubscriptionState = async () => {
     try {
-      const response = await paymentService.getSubscriptionStatus();
+      const response = await paymentService.getSubscriptionStatus(true);
       if (response.plan_type === 'paid') {
         setPaidSubscriptionState(
           typeof response.subscription_end_date === 'string' ? response.subscription_end_date : null,
@@ -214,8 +294,35 @@ export const PricingModal = ({ isOpen, onClose, isClosable, source }: PricingMod
   };
 
   const handleSubscribe = async () => {
+    if (isPaymentLoading || !market) return;
+    if (market === 'india' && !cashfree) {
+      toast.error('Secure checkout is loading. Please try again in a moment.');
+      return;
+    }
     try {
       setIsPaymentLoading(true);
+
+      if (market === 'international') {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (!session) {
+          toast.error('Please sign in again to continue.');
+          return;
+        }
+        stripeRequestKey.current ??= crypto.randomUUID();
+        const checkout = await fetch('/api/payment/stripe/checkout', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${session.access_token}`, 'Idempotency-Key': stripeRequestKey.current },
+        });
+        const result = await checkout.json();
+        if (!checkout.ok) throw new Error(result.error || 'Unable to start checkout.');
+        const url = new URL(result.url);
+        if (url.protocol !== 'https:' || url.hostname !== 'checkout.stripe.com')
+          throw new Error('Invalid checkout URL.');
+        window.location.assign(url.toString());
+        return;
+      }
 
       const response = await paymentService.createPayment({
         plan_type: selectedPlan,
@@ -234,7 +341,6 @@ export const PricingModal = ({ isOpen, onClose, isClosable, source }: PricingMod
           order_id?: string;
         };
       };
-      console.log('Backend Response:', data);
 
       const paymentStatus = data.payment_status || data.data?.payment_status;
       const sessionId = data.payment_session_id || data.data?.payment_session_id;
@@ -249,8 +355,6 @@ export const PricingModal = ({ isOpen, onClose, isClosable, source }: PricingMod
 
       // Regular payment flow
       if (!sessionId) {
-        const fullResponse = JSON.stringify(data, null, 2);
-        alert(`Payment session ID is missing.\n\nBackend response:\n${fullResponse}`);
         toast.error('Unable to start payment. Please try again.');
         return;
       }
@@ -261,8 +365,6 @@ export const PricingModal = ({ isOpen, onClose, isClosable, source }: PricingMod
       }
 
       if (!orderId) {
-        const fullResponse = JSON.stringify(data, null, 2);
-        alert(`Order ID is missing.\n\nBackend response:\n${fullResponse}`);
         toast.error('Payment verification could not start. Please try again.');
         return;
       }
@@ -329,9 +431,7 @@ export const PricingModal = ({ isOpen, onClose, isClosable, source }: PricingMod
             }
 
             const resolvedSubscriptionEndDate =
-              verifyData.data?.subscription_end_date ??
-              verifyData.subscription?.subscription_end_date ??
-              null;
+              verifyData.data?.subscription_end_date ?? verifyData.subscription?.subscription_end_date ?? null;
 
             setPaidSubscriptionState(
               typeof resolvedSubscriptionEndDate === 'string' ? resolvedSubscriptionEndDate : null,
@@ -357,7 +457,7 @@ export const PricingModal = ({ isOpen, onClose, isClosable, source }: PricingMod
         toast.error('Session expired. Please sign in again to complete payment.');
         return;
       }
-      toast.error('Payment failed. Please try again.');
+      toast.error(error instanceof Error ? error.message : 'Payment failed. Please try again.');
     } finally {
       setIsPaymentLoading(false);
     }
@@ -386,13 +486,18 @@ export const PricingModal = ({ isOpen, onClose, isClosable, source }: PricingMod
 
           {/* Modal Container */}
           <motion.div
+            ref={dialogRef}
+            tabIndex={-1}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="meera-lifetime-title"
             initial={{ opacity: 0, y: '100%' }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: '100%' }}
             className="fixed z-[9999] bottom-0 left-0 right-0 h-[calc(100dvh-8px)] rounded-t-3xl
                        sm:fixed sm:inset-0 sm:m-auto sm:w-[580px] sm:h-[calc(100dvh-8px)] sm:rounded-[24px]
                        px-5 py-4 sm:px-11 sm:py-7 md:px-12 md:py-9
-                       [@media(max-height:760px)]:!px-9 [@media(max-height:760px)]:!py-4
+                       [@media(max-height:760px)]:!py-4
                        [@media(max-height:700px)]:!py-3"
             style={{
               backgroundImage: `
@@ -407,13 +512,14 @@ export const PricingModal = ({ isOpen, onClose, isClosable, source }: PricingMod
               backgroundPosition: 'right top, center',
               backgroundRepeat: 'no-repeat, no-repeat',
               backgroundSize: '150px, cover',
-              overflow: 'hidden',
+              overflowY: 'auto',
             }}
           >
             {/* Close Button - Fixed at top-right */}
             {isClosable && (
               <button
                 onClick={onClose}
+                aria-label="Close pricing"
                 className="absolute top-4 right-4 text-white/60 hover:text-white transition-colors z-10
                            w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10"
               >
@@ -451,9 +557,18 @@ export const PricingModal = ({ isOpen, onClose, isClosable, source }: PricingMod
                         }}
                         initial={{ opacity: 0, y: '-8%' }}
                         animate={{
-                          opacity: [0, 1, 1, 0.9],
+                          opacity: [
+                            0,
+                            1,
+                            1,
+                            0.9,
+                          ],
                           y: ['-8%', '118%'],
-                          x: [0, piece.drift, 0],
+                          x: [
+                            0,
+                            piece.drift,
+                            0,
+                          ],
                           rotate: [0, piece.spin],
                         }}
                         transition={{
@@ -471,178 +586,191 @@ export const PricingModal = ({ isOpen, onClose, isClosable, source }: PricingMod
             {!showEntryCode ? (
               /* Main Pricing View */
               <div className="h-full flex flex-col">
-                {/* Header Section */}
-                <div className="flex-shrink-0 mb-6 [@media(max-height:760px)]:!mb-3">
-                  <div className="flex items-center gap-2">
-                    <Image
-                      src={meeraLogo}
-                      alt={`${process.env.NEXT_PUBLIC_APP_NAME?.toLowerCase()}`}
-                      height={24}
-                      className="h-5 w-auto sm:h-6"
-                    />
-                    <span className="text-white font-serif italic text-lg sm:text-xl">
-                      {`${process.env.NEXT_PUBLIC_APP_NAME?.toLowerCase()}`}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Main Title */}
-                <div className="flex-shrink-0 mb-4 [@media(max-height:760px)]:!mb-2">
-                  <h1 className="text-3xl sm:text-[32px] text-white font-serif font-semibold leading-[1.12] sm:leading-[1.08]
-                                 [@media(max-height:760px)]:!text-[28px] [@media(max-height:700px)]:!text-[26px]">
-                    <span className="block">Your Conscious Intelligence (CI)</span>
-                    <span className="block">Companion</span>
-                  </h1>
-                </div>
-
-                {/* Description */}
-                <div className="flex-shrink-0 mb-5 sm:mb-8 md:mb-10 [@media(max-height:760px)]:!mb-4 [@media(max-height:700px)]:!mb-3">
-                  <p className="text-white text-sm sm:text-base italic font-sans font-semibold leading-relaxed
-                                [@media(max-height:760px)]:!text-sm">
-                    A friend that understands you, remembers you, evolves with you.
-                  </p>
-                </div>
-
-                <div className="flex-grow min-h-0 md:min-h-8 [@media(max-height:760px)]:!min-h-0" />
-
-                {/* Content Section */}
-                <div className="flex-shrink-0">
-                  {/* Models Available */}
-                  <div className="mb-3 sm:mb-4 md:mb-5 [@media(max-height:760px)]:!mb-2">
-                    <p className="text-white text-sm sm:text-base font-semibold">7500+ Minds. One Hive Mind.</p>
-                  </div>
-
-                  {/* Pricing Plan */}
-                  <div className="mb-2 sm:mb-3 md:mb-4 space-y-3 [@media(max-height:760px)]:!mb-2 [@media(max-height:760px)]:!space-y-2">
-                    <button
-                      onClick={() => setSelectedPlan('monthly')}
-                      className="w-full bg-white/10 backdrop-blur-sm border border-white rounded-xl
-                                 p-4 flex items-center justify-between [@media(max-height:760px)]:!p-3
-                                 hover:bg-white/15 transition-colors"
-                    >
-                      <div className="flex flex-col items-start">
-                        <span className="text-white text-lg sm:text-xl font-medium mb-1 [@media(max-height:760px)]:!mb-0.5 [@media(max-height:760px)]:!text-lg">
-                          30-day access
-                        </span>
-                        <div className="text-white/80 text-base sm:text-lg [@media(max-height:760px)]:!text-base">
-                          {getPriceDisplay(PLAN_PRICES.monthly, discountedPrices.monthly)}
-                        </div>
-                        <div className="text-white/55 text-[11px] sm:text-xs leading-tight mt-1 [@media(max-height:760px)]:!mt-0.5">
-                          One-time purchase · No auto-renewal · Text | Web | Images
-                        </div>
-                      </div>
-
-                      {selectedPlan === 'monthly' && (
-                        <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-white flex items-center justify-center flex-shrink-0">
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            className="h-3 w-3 sm:h-4 sm:w-4 text-[#741942]"
-                            viewBox="0 0 20 20"
-                            fill="currentColor"
-                          >
-                            <path
-                              fillRule="evenodd"
-                              d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                              clipRule="evenodd"
-                            />
-                          </svg>
-                        </div>
-                      )}
-                    </button>
-
-                    <button
-                      onClick={() => setSelectedPlan('lifetime')}
-                      className="w-full bg-white/10 backdrop-blur-sm border border-white rounded-xl
-                                 p-4 flex items-center justify-between [@media(max-height:760px)]:!p-3
-                                 hover:bg-white/15 transition-colors"
-                    >
-                      <div className="flex flex-col items-start">
-                        <span className="text-white text-lg sm:text-xl font-medium mb-1 [@media(max-height:760px)]:!mb-0.5 [@media(max-height:760px)]:!text-lg">
-                          Lifetime
-                        </span>
-                        <div className="text-white/80 text-base sm:text-lg [@media(max-height:760px)]:!text-base">
-                          {getPriceDisplay(PLAN_PRICES.lifetime, discountedPrices.lifetime)}
-                        </div>
-                        <div className="text-white/55 text-[11px] sm:text-xs leading-tight mt-1 [@media(max-height:760px)]:!mt-0.5">
-                          One-time purchase · Text | Web | Images
-                        </div>
-                      </div>
-
-                      {selectedPlan === 'lifetime' && (
-                        <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-white flex items-center justify-center flex-shrink-0">
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            className="h-3 w-3 sm:h-4 sm:w-4 text-[#741942]"
-                            viewBox="0 0 20 20"
-                            fill="currentColor"
-                          >
-                            <path
-                              fillRule="evenodd"
-                              d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                              clipRule="evenodd"
-                            />
-                          </svg>
-                        </div>
-                      )}
-                    </button>
-                  </div>
-
-                  {/* Applied Coupon */}
-                  {appliedCoupon && (
-                    <div
-                      className="mb-4 flex items-center justify-between bg-white/10 border border-green-400/30 
-                                    px-4 py-3 rounded-lg"
-                    >
-                      <div className="text-white text-sm">
-                        <span>Coupon: {appliedCoupon}</span>
-                        <span className="ml-2 text-green-400 font-medium">
-                          ({COUPON_CODES[appliedCoupon as keyof typeof COUPON_CODES]}% off)
-                        </span>
-                      </div>
-                      <button
-                        onClick={removeCoupon}
-                        className="text-red-400 text-sm hover:text-red-300 transition-colors font-medium"
-                      >
-                        Remove
-                      </button>
+                <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+                  {/* Header Section */}
+                  <div className="flex-shrink-0 mb-6 [@media(max-height:760px)]:!mb-3">
+                    <div className="flex items-center gap-2">
+                      <Image src={meeraLogo} alt="Meera" height={24} className="h-5 w-auto sm:h-6" />
+                      <span className="text-white font-serif italic text-lg sm:text-xl">Meera</span>
                     </div>
-                  )}
-                </div>
+                  </div>
 
+                  {/* Main Title */}
+                  <div className="flex-shrink-0 mb-4 [@media(max-height:760px)]:!mb-2">
+                    <h1
+                      id="meera-lifetime-title"
+                      className="text-3xl sm:text-[32px] text-white font-serif font-semibold leading-[1.12] sm:leading-[1.08]
+                                 [@media(max-height:760px)]:!text-[28px] [@media(max-height:700px)]:!text-[26px]"
+                    >
+                      <span className="block">Your companion.</span>
+                      <span className="block">For life.</span>
+                    </h1>
+                  </div>
+
+                  {/* Description */}
+                  <div className="flex-shrink-0 mb-5 sm:mb-8 md:mb-10 [@media(max-height:760px)]:!mb-4 [@media(max-height:700px)]:!mb-3">
+                    <p
+                      className="text-white text-sm sm:text-base italic font-sans font-semibold leading-relaxed
+                                [@media(max-height:760px)]:!text-sm"
+                    >
+                      A companion for conversations, fresh ideas, and everything you want to explore.
+                    </p>
+                  </div>
+
+                  <div className="flex-grow min-h-0 md:min-h-8 [@media(max-height:760px)]:!min-h-0" />
+
+                  {/* Content Section */}
+                  <div className="flex-shrink-0">
+                    {/* Models Available */}
+                    <div className="mb-3 sm:mb-4 md:mb-5 [@media(max-height:760px)]:!mb-2">
+                      <p className="text-white text-sm sm:text-base font-semibold">
+                        One lifetime offer. Everything below included.
+                      </p>
+                    </div>
+
+                    {/* Pricing Plan */}
+                    <div className="mb-2 sm:mb-3 md:mb-4 space-y-3 [@media(max-height:760px)]:!mb-2 [@media(max-height:760px)]:!space-y-2">
+                      <section
+                        aria-label="Lifetime access"
+                        className="rounded-2xl border border-white/30 bg-white/10 p-5 sm:p-6"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <h2 className="text-lg font-semibold text-white">Meera for life</h2>
+                          <span className="rounded-full bg-[#e9efce] px-3 py-1 text-xs font-semibold text-[#31412a]">
+                            One payment
+                          </span>
+                        </div>
+                        <div className="mt-4 text-5xl tracking-tight">
+                          {market === 'india' ? (
+                            getPriceDisplay(PLAN_PRICES.lifetime, discountedPrices.lifetime)
+                          ) : market === 'international' ? (
+                            getPriceDisplay(INTERNATIONAL_LIFETIME_PRICE_USD, null, 'US$')
+                          ) : (
+                            <span className="text-lg text-white/70">Loading your offer…</span>
+                          )}
+                        </div>
+                        <p className="mt-2 text-sm text-white/75">
+                          Lifetime access. No monthly bills. No auto-renewal.
+                        </p>
+                        <label className="mt-4 flex flex-wrap items-center justify-between gap-2 text-xs text-white/80">
+                          Payment region
+                          <select
+                            aria-label="Payment region"
+                            value={market ?? ''}
+                            disabled={isPaymentLoading}
+                            onChange={(event) => {
+                              setMarket(event.target.value as 'india' | 'international');
+                              removeCoupon();
+                              stripeRequestKey.current = null;
+                            }}
+                            className="rounded-lg border border-white/30 bg-[#4E0228] px-3 py-2 text-white"
+                          >
+                            <option value="" disabled>
+                              Select your region
+                            </option>
+                            <option value="india">India · INR</option>
+                            <option value="international">International · USD</option>
+                          </select>
+                        </label>
+                        {offerError && (
+                          <p className="mt-2 text-xs text-white/75">Choose your payment region to see your offer.</p>
+                        )}
+                        <ul className="mt-5 space-y-2.5 text-sm text-white/90">
+                          <li>✓ A companion for your everyday conversations</li>
+                          <li>✓ Explore ideas with web information</li>
+                          <li>✓ Create and share with images</li>
+                          <li>✓ Access opens after payment confirmation</li>
+                        </ul>
+                      </section>
+                    </div>
+
+                    {/* Applied Coupon */}
+                    {appliedCoupon && (
+                      <div
+                        className="mb-4 flex items-center justify-between bg-white/10 border border-green-400/30
+                                    px-4 py-3 rounded-lg"
+                      >
+                        <div className="text-white text-sm">
+                          <span>Coupon: {appliedCoupon}</span>
+                          <span className="ml-2 text-green-400 font-medium">
+                            ({COUPON_CODES[appliedCoupon as keyof typeof COUPON_CODES]}% off)
+                          </span>
+                        </div>
+                        <button
+                          onClick={removeCoupon}
+                          className="text-red-400 text-sm hover:text-red-300 transition-colors font-medium"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
                 {/* Bottom Section */}
-                <div className="flex-shrink-0 space-y-2 sm:space-y-3 md:space-y-4 [@media(max-height:760px)]:!space-y-2">
+                <div className="flex-shrink-0 space-y-2 border-t border-white/15 pt-3 mt-3">
                   {/* Enter Code Button */}
-                  <button
-                    onClick={() => setShowEntryCode(true)}
-                    disabled={isPaymentLoading || showSuccessCelebration}
-                    className="w-full text-white/60 py-2.5 md:py-3 rounded-full 
-                               text-base sm:text-lg font-medium hover:opacity-90 
-                               transition-opacity disabled:opacity-50 disabled:cursor-not-allowed
-                               [@media(max-height:760px)]:!py-1.5 [@media(max-height:760px)]:!text-base"
-                  >
-                    Enter Code
-                  </button>
+                  {market === 'india' && (
+                    <button
+                      onClick={() => setShowEntryCode(true)}
+                      disabled={isPaymentLoading || showSuccessCelebration}
+                      className="w-full text-white/70 py-1 rounded-full
+                               text-sm font-medium hover:opacity-90
+                               transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Have a coupon code?
+                    </button>
+                  )}
 
                   {/* Subscribe Button */}
                   <button
                     onClick={handleSubscribe}
-                    disabled={isPaymentLoading || showSuccessCelebration}
-                    className="w-full bg-[#FDF6F1] text-[#1A0B14] py-3 md:py-3.5 rounded-full 
-                               text-base sm:text-lg font-medium hover:opacity-90 
+                    disabled={
+                      isPaymentLoading ||
+                      showSuccessCelebration ||
+                      !market ||
+                      (market === 'international' && !stripeReady)
+                    }
+                    className="w-full bg-[#FDF6F1] text-[#1A0B14] py-3 md:py-3.5 rounded-full
+                               text-base sm:text-lg font-medium hover:opacity-90
                                transition-opacity disabled:opacity-50 disabled:cursor-not-allowed
                                [@media(max-height:760px)]:!py-2.5 [@media(max-height:760px)]:!text-base"
                   >
                     {isPaymentLoading
-                      ? 'Processing...'
-                      : getCurrentPrice(selectedPlan) === 0
-                        ? 'Continue Our Journey'
-                        : 'Continue Our Journey'}
+                      ? 'Opening secure checkout…'
+                      : market === 'international' && !stripeReady
+                        ? 'International checkout coming soon'
+                        : market === 'international'
+                          ? 'Get lifetime access · US$99'
+                          : getCurrentPrice(selectedPlan) === 0
+                            ? 'Activate lifetime access'
+                            : `Get lifetime access · ₹${getCurrentPrice(selectedPlan)}`}
                   </button>
+                  <p className="text-center text-xs text-white/75">
+                    {market === 'india'
+                      ? 'Secure payment with Cashfree · UPI & cards'
+                      : market === 'international'
+                        ? 'Secure payment with Stripe · US$99 or local equivalent'
+                        : 'Choose your payment region above'}
+                  </p>
+                  <a
+                    href="mailto:siddharth.nag@himeera.com"
+                    className="block text-center text-xs text-white/70 underline underline-offset-4"
+                  >
+                    Questions before you buy? Talk to us
+                  </a>
                   <p className="text-center text-[11px] leading-5 text-white/60">
-                    Sold by Meera Labs Inc. ·{' '}
-                    <Link href="/terms" target="_blank" className="underline">Terms</Link> ·{' '}
-                    <Link href="/refund-policy" target="_blank" className="underline">Refunds</Link> ·{' '}
-                    <Link href="/privacy" target="_blank" className="underline">Privacy</Link>
+                    Meera Labs Inc. ·{' '}
+                    <Link href="/terms" target="_blank" className="underline">
+                      Terms
+                    </Link>{' '}
+                    ·{' '}
+                    <Link href="/refund-policy" target="_blank" className="underline">
+                      Refunds
+                    </Link>{' '}
+                    ·{' '}
+                    <Link href="/privacy" target="_blank" className="underline">
+                      Privacy
+                    </Link>
                   </p>
 
                   {/* Logout */}
@@ -660,7 +788,7 @@ export const PricingModal = ({ isOpen, onClose, isClosable, source }: PricingMod
               </div>
             ) : (
               /* Entry Code View */
-              <div className="h-full flex flex-col">
+              <div className="min-h-full flex flex-col">
                 {/* Header with Back Button */}
                 <div className="flex-shrink-0 mb-8">
                   <div className="flex items-center gap-3">
@@ -668,7 +796,7 @@ export const PricingModal = ({ isOpen, onClose, isClosable, source }: PricingMod
                       onClick={() => setShowEntryCode(false)}
                       disabled={isPaymentLoading || showSuccessCelebration}
                       aria-label="Go back"
-                      className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 
+                      className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20
                                  flex items-center justify-center transition-colors border border-white/20
                                  disabled:opacity-50 disabled:cursor-not-allowed"
                     >
@@ -676,15 +804,8 @@ export const PricingModal = ({ isOpen, onClose, isClosable, source }: PricingMod
                     </button>
 
                     <div className="flex items-center gap-2">
-                      <Image
-                        src={meeraLogo}
-                        alt={`${process.env.NEXT_PUBLIC_APP_NAME?.toLowerCase()}`}
-                        height={24}
-                        className="h-5 w-auto sm:h-6"
-                      />
-                      <span className="text-white font-serif italic text-lg sm:text-xl">
-                        {`${process.env.NEXT_PUBLIC_APP_NAME?.toLowerCase()}`}
-                      </span>
+                      <Image src={meeraLogo} alt="Meera" height={24} className="h-5 w-auto sm:h-6" />
+                      <span className="text-white font-serif italic text-lg sm:text-xl">Meera</span>
                     </div>
                   </div>
                 </div>
@@ -692,7 +813,12 @@ export const PricingModal = ({ isOpen, onClose, isClosable, source }: PricingMod
                 {/* Main Content */}
                 <div className="flex-grow flex flex-col min-h-0">
                   <div className="max-w-sm mx-auto w-full mt-10">
-                    <h2 className="text-xl sm:text-2xl text-white font-serif mb-8 text-center">Enter Coupon Code</h2>
+                    <h2
+                      id="meera-lifetime-title"
+                      className="text-xl sm:text-2xl text-white font-serif mb-8 text-center"
+                    >
+                      Enter Coupon Code
+                    </h2>
 
                     <div className="space-y-4">
                       <input
@@ -701,8 +827,8 @@ export const PricingModal = ({ isOpen, onClose, isClosable, source }: PricingMod
                         onChange={(e) => setEntryCode(e.target.value.toUpperCase())}
                         disabled={isPaymentLoading || showSuccessCelebration}
                         placeholder="Enter Code"
-                        className="w-full bg-white text-[#1A0B14] px-5 py-4 rounded-full 
-                                   text-base placeholder:text-gray-400 focus:outline-none focus:ring-2 
+                        className="w-full bg-white text-[#1A0B14] px-5 py-4 rounded-full
+                                   text-base placeholder:text-gray-400 focus:outline-none focus:ring-2
                                    focus:ring-white/20 transition-shadow disabled:opacity-50"
                       />
 
