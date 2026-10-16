@@ -41,7 +41,10 @@ const payments = compile('src/lib/stripePayments.ts', { stripe: FakeStripe, '@su
 const checkout = compile('src/app/api/payment/stripe/checkout/route.ts', { '@/lib/stripePayments': payments });
 const webhook = compile('src/app/api/payment/stripe/webhook/route.ts', { '@/lib/stripePayments': payments });
 const status = compile('src/app/api/payment/stripe/status/route.ts', { '@/lib/stripePayments': payments });
+const offer = compile('src/app/api/payment/offer/route.ts', { '@/lib/stripePayments': payments });
 function check(value, label) { assert.ok(value, label); console.log('PASS', label); }
+check((await offer.GET(new NextRequest('http://localhost/api/payment/offer', {headers:{'x-vercel-ip-country':'IN'}})).json()).market === 'india', 'Indian visitors receive the Cashfree offer');
+check((await offer.GET(new NextRequest('http://localhost/api/payment/offer', {headers:{'x-vercel-ip-country':'US'}})).json()).market === 'international', 'international visitors receive the Stripe offer');
 check(payments.stripeCheckoutReady(), 'live key and webhook enable production checkout');
 env.STRIPE_SECRET_KEY = 'sk_test_fixture';
 check(!payments.stripeCheckoutReady(), 'test key cannot enable production checkout');
@@ -77,6 +80,7 @@ rows.clear();
 const request = new NextRequest('http://localhost/api/payment/stripe/checkout', { method: 'POST', headers: { Authorization: 'Bearer fixture', 'Idempotency-Key': 'test-request-123' }, body: JSON.stringify({ amount: 1, plan_type: 'monthly' }) });
 response = await checkout.POST(request);
 check(response.status === 200 && createdOptions.line_items[0].price_data.unit_amount === 9900 && createdOptions.mode === 'payment', 'server ignores client price and locks USD 99 one-time purchase');
+check(createdOptions.success_url.startsWith('https://www.himeera.com/payment') && createdOptions.cancel_url.startsWith('https://www.himeera.com/payment'), 'production checkout returns directly to the canonical domain');
 check(!('payment_method_types' in createdOptions), 'Stripe can select eligible payment methods dynamically');
 user = null;
 response = await checkout.POST(request);

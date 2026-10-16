@@ -34,7 +34,7 @@ export default function PricingPage() {
               <p className="mt-5 font-serif text-5xl">₹{plan.price}</p>
               <p className="mt-3 text-primary/70">{plan.detail}</p>
               <p className="mt-5 font-serif text-3xl">US${INTERNATIONAL_LIFETIME_PRICE_USD} internationally</p>
-              <p className="mt-2 text-primary/70">The same lifetime access, paid once through Stripe in USD.</p>
+              <p className="mt-2 text-primary/70">The same lifetime access, paid once through Stripe. Local-currency equivalents may be offered at checkout.</p>
               <p className="mt-6 text-sm text-primary/70">Includes text chat, web, and images.</p>
             </section>
           ))}
